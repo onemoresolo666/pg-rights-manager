@@ -1,0 +1,65 @@
+---
+- name: Автоматическая плановая ротация SSL-сертификатов PG Rights Panel
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars:
+    # Исправлены пути (ключ в private, сертификат в certs) и удален лишний пробел
+    ssl_key_path: "/etc/pki/tls/private/pgrights.key"
+    ssl_crt_path: "/etc/pki/tls/certs/pgrights.crt"
+    # Настройки субъекта сертификата
+    ssl_subj: "/C=RU/ST=Moscow/L=Moscow/O=DBA-Enterprise/CN=localhost"
+    ssl_days_valid: 365
+
+  tasks:
+    - name: 1. Гарантируем наличие целевых директорий для хранения SSL
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - "/etc/pki/tls/private"
+        - "/etc/pki/tls/certs"
+
+    - name: 2. Заблаговременно создаем пустой файл ключа с безопасными правами
+      ansible.builtin.file:
+        path: "{{ ssl_key_path }}"
+        state: touch
+        owner: root
+        group: root
+        mode: '0600'
+        modification_time: preserve
+        access_time: preserve
+
+    - name: 3. Генерация нового приватного ключа и SSL-сертификата через OpenSSL
+      ansible.builtin.command: >
+        openssl req -x509 -nodes -days {{ ssl_days_valid }} -newkey rsa:2048
+        -keyout {{ ssl_key_path }}
+        -out {{ ssl_crt_path }}
+        -subj "{{ ssl_subj }}"
+      register: openssl_result
+      changed_when: openssl_result.rc == 0
+
+    - name: 4. Выставляем права доступа на публичный SSL-сертификат
+      ansible.builtin.file:
+        path: "{{ ssl_crt_path }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: 5. Проверяем синтаксическую валидность конфигурации веб-сервера Nginx
+      ansible.builtin.command: nginx -t
+      register: nginx_test
+      changed_when: false
+      failed_when: nginx_test.rc != 0
+
+    - name: 6. Перезапускаем веб-сервер Nginx для применения новых SSL-сертификатов
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted
+      when: nginx_test.rc == 0
+

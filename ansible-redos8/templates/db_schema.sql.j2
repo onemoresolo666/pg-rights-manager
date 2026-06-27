@@ -1,0 +1,387 @@
+-- 1. Создаем пользователя с правом управлять ТОЛЬКО ролями, но без прав суперпользователя
+CREATE ROLE pgrights_core_admin WITH LOGIN PASSWORD '{{ core_admin_password }}' CREATEROLE;
+
+-- 2. Создаем базу данных
+CREATE DATABASE service_manager_db WITH OWNER pgrights_core_admin;
+
+-- 3. Даем ему права владельца над служебной базой данных
+ALTER DATABASE service_manager_db OWNER TO pgrights_core_admin;
+
+-- Переключаемся на созданную базу данных для дальнейшего наката структуры
+\c service_manager_db
+
+-- Накатываем расширение триграмм
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
+
+-- 1. ПЕРВЫМ ДЕЛОМ СОЗДАЕМ ТАБЛИЦУ ПОЛЬЗОВАТЕЛЕЙ (РОДИТЕЛЬСКИЙ ОБЪЕКТ)
+CREATE TABLE IF NOT EXISTS public.panel_users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    role VARCHAR(20) NOT NULL
+);
+
+ALTER TABLE public.panel_users ALTER COLUMN role SET DEFAULT 'admin';
+
+-- Назначаем владельцем нашего админа ядра (чтобы у FastAPI был к ней полный доступ)
+ALTER TABLE public.panel_users OWNER TO pgrights_core_admin;
+
+
+
+--
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE TABLE public.audit_logs (
+    log_id integer NOT NULL,
+    "timestamp" timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    target_server character varying(50) NOT NULL,
+    username character varying(63) NOT NULL,
+    table_name character varying(255),
+    action character varying(63) NOT NULL,
+    privilege character varying(255) NOT NULL,
+    status character varying(32) NOT NULL,
+    error_message text,
+    admin_username character varying(63)
+);
+
+
+ALTER TABLE public.audit_logs OWNER TO pgrights_core_admin;
+
+--
+-- Name: audit_logs_log_id_seq; Type: SEQUENCE; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE SEQUENCE public.audit_logs_log_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.audit_logs_log_id_seq OWNER TO pgrights_core_admin;
+
+--
+-- Name: audit_logs_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER SEQUENCE public.audit_logs_log_id_seq OWNED BY public.audit_logs.log_id;
+
+
+--
+-- Name: one_time_tokens; Type: TABLE; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE TABLE public.one_time_tokens (
+    token_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    db_user character varying(65) NOT NULL,
+    encrypted_password text NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    expires_at timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public.one_time_tokens OWNER TO pgrights_core_admin;
+
+--
+-- Name: panel_user_role_limits; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.panel_user_role_limits (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    allowed_target_role character varying(255) NOT NULL
+);
+
+
+ALTER TABLE public.panel_user_role_limits OWNER TO pgrights_core_admin;
+
+--
+-- Name: panel_user_role_limits_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.panel_user_role_limits_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.panel_user_role_limits_id_seq OWNER TO pgrights_core_admin;
+
+--
+-- Name: panel_user_role_limits_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER SEQUENCE public.panel_user_role_limits_id_seq OWNED BY public.panel_user_role_limits.id;
+
+
+--
+-- Name: panel_user_server_access; Type: TABLE; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE TABLE public.panel_user_server_access (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    allowed_server_id character varying(255) NOT NULL,
+    allowed_database character varying(255) DEFAULT 'ALL'::character varying
+);
+
+
+ALTER TABLE public.panel_user_server_access OWNER TO pgrights_core_admin;
+
+--
+-- Name: panel_user_server_access_id_seq; Type: SEQUENCE; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE SEQUENCE public.panel_user_server_access_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.panel_user_server_access_id_seq OWNER TO pgrights_core_admin;
+
+--
+-- Name: panel_user_server_access_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER SEQUENCE public.panel_user_server_access_id_seq OWNED BY public.panel_user_server_access.id;
+
+--
+-- Name: registered_servers; Type: TABLE; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE TABLE public.registered_servers (
+    server_id character varying(50) NOT NULL,
+    host character varying(255) NOT NULL,
+    port integer DEFAULT 5432,
+    db_user character varying(63) NOT NULL,
+    dbname character varying(63) NOT NULL,
+    encrypted_password text NOT NULL,
+    is_active boolean DEFAULT true
+);
+
+
+ALTER TABLE public.registered_servers OWNER TO pgrights_core_admin;
+
+--
+-- Name: audit_logs log_id; Type: DEFAULT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.audit_logs ALTER COLUMN log_id SET DEFAULT nextval('public.audit_logs_log_id_seq'::regclass);
+
+
+--
+-- Name: panel_user_role_limits id; Type: DEFAULT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_role_limits ALTER COLUMN id SET DEFAULT nextval('public.panel_user_role_limits_id_seq'::regclass);
+
+
+--
+-- Name: panel_user_server_access id; Type: DEFAULT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_server_access ALTER COLUMN id SET DEFAULT nextval('public.panel_user_server_access_id_seq'::regclass);
+
+
+--
+-- Name: panel_users id; Type: DEFAULT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_users ALTER COLUMN id SET DEFAULT nextval('public.panel_users_id_seq'::regclass);
+
+
+--
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (log_id);
+
+
+--
+-- Name: one_time_tokens one_time_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.one_time_tokens
+    ADD CONSTRAINT one_time_tokens_pkey PRIMARY KEY (token_id);
+
+
+--
+-- Name: panel_user_role_limits panel_user_role_limits_pkey; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_role_limits
+    ADD CONSTRAINT panel_user_role_limits_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: panel_user_server_access panel_user_server_access_pkey; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_server_access
+    ADD CONSTRAINT panel_user_server_access_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: panel_users panel_users_pkey; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_users
+    ADD CONSTRAINT panel_users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: panel_users panel_users_username_key; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_users
+    ADD CONSTRAINT panel_users_username_key UNIQUE (username);
+
+
+--
+-- Name: registered_servers registered_servers_pkey; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.registered_servers
+    ADD CONSTRAINT registered_servers_pkey PRIMARY KEY (server_id);
+
+
+--
+-- Name: panel_user_role_limits uq_user_role; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_role_limits
+    ADD CONSTRAINT uq_user_role UNIQUE (user_id, allowed_target_role);
+
+
+--
+-- Name: panel_user_server_access uq_user_server; Type: CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_server_access
+    ADD CONSTRAINT uq_user_server UNIQUE (user_id, allowed_server_id);
+
+
+--
+-- Name: idx_audit_logs_action_trgm; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_audit_logs_action_trgm ON public.audit_logs USING gin (action public.gin_trgm_ops);
+
+
+--
+-- Name: idx_audit_logs_admin_user; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_audit_logs_admin_user ON public.audit_logs USING btree (admin_username);
+
+
+--
+-- Name: idx_audit_logs_target; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_audit_logs_target ON public.audit_logs USING btree (username, target_server);
+
+
+-- Создаем правильный индекс с фильтром по активности
+CREATE UNIQUE INDEX unique_server_connection ON registered_servers (host, port, dbname) WHERE (is_active = true);
+
+--
+-- Name: idx_audit_logs_time_brin; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_audit_logs_time_brin ON public.audit_logs USING brin ("timestamp");
+
+
+--
+-- Name: idx_role_limits_user_id; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_role_limits_user_id ON public.panel_user_role_limits USING btree (user_id);
+
+
+--
+-- Name: idx_server_access_user_id; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_server_access_user_id ON public.panel_user_server_access USING btree (user_id);
+
+
+--
+-- Name: idx_tokens_expiry; Type: INDEX; Schema: public; Owner: pgrights_core_admin
+--
+
+CREATE INDEX idx_tokens_expiry ON public.one_time_tokens USING btree (expires_at);
+
+
+--
+-- Name: panel_user_role_limits fk_panel_user_roles; Type: FK CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_role_limits
+    ADD CONSTRAINT fk_panel_user_roles FOREIGN KEY (user_id) REFERENCES public.panel_users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: panel_user_server_access fk_panel_user_servers; Type: FK CONSTRAINT; Schema: public; Owner: pgrights_core_admin
+--
+
+ALTER TABLE ONLY public.panel_user_server_access
+    ADD CONSTRAINT fk_panel_user_servers FOREIGN KEY (user_id) REFERENCES public.panel_users(id) ON DELETE CASCADE;
+
+
+
+-- --- БЛОК ОПТИМИЗАЦИИ ОЗУ И КЭШЕЙ ПАНЕЛИ ---
+ALTER SYSTEM SET shared_buffers = '2GB';
+ALTER SYSTEM SET effective_cache_size = '6GB';
+ALTER SYSTEM SET work_mem = '16MB';
+ALTER SYSTEM SET maintenance_work_mem = '300MB';
+ALTER SYSTEM SET random_page_cost = 1.1;
+
+-- --- КОНТУР ПАРАЛЛЕЛЬНОГО СКАНИРОВАНИЯ КАТАЛОГОВ ---
+ALTER SYSTEM SET max_worker_processes = 6;
+ALTER SYSTEM SET max_parallel_workers = 6;
+ALTER SYSTEM SET max_parallel_workers_per_gather = 3;
+ALTER SYSTEM SET max_parallel_maintenance_workers = 3;
+
+-- --- АВТОВАКУУМ ---
+ALTER SYSTEM SET autovacuum = 'on';
+ALTER SYSTEM SET autovacuum_max_workers = 2;
+ALTER SYSTEM SET autovacuum_naptime = '1min';
+ALTER SYSTEM SET autovacuum_work_mem = '256MB';
+ALTER SYSTEM SET autovacuum_vacuum_threshold = 50;
+ALTER SYSTEM SET autovacuum_vacuum_scale_factor = 0.05;
+ALTER SYSTEM SET autovacuum_analyze_threshold = 25;
+ALTER SYSTEM SET autovacuum_analyze_scale_factor = 0.02;
+ALTER SYSTEM SET autovacuum_vacuum_cost_delay = '2ms';
+ALTER SYSTEM SET autovacuum_vacuum_cost_limit = 400;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

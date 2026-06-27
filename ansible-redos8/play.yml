@@ -1,0 +1,373 @@
+---
+- name: Шаг 1. Настройка окружения и установка пакетов Python
+  hosts: localhost
+  gather_facts: yes
+  connection: local
+  become: yes
+
+  vars:
+    # Путь к каталогу проекта на сервере
+    project_dir: "/opt/pgrights_manager" #директория бекэнда
+    venv_dir: "{{ project_dir }}/.venv" #окружение
+    core_admin_password: "SecureAdminPassword2026_ChangeMe" #пароль юзера сервисной базы
+    dns_usertoken_name: "192.168.0.142" #dns имя по которому юзеры будут получать ссылку на учетные данные
+    ssl_hostname: "pgr.local" #ssl имя хоста
+
+  tasks:
+    - name: 1.0.а. Установить инструменты разработки Python в РЕД ОС
+      dnf:
+        name:
+          - python3-devel   # Обязательный пакет для сборки криптографии под Python 3.11
+          - gcc             # Компилятор, если он ещё не установлен
+          - rsync
+        state: present
+        update_cache: yes
+
+    - name: 1.1. Обеспечить наличие корневой директории проекта
+      file:
+        path: "{{ project_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: 1.2. Создать файл requirements.txt на целевом сервере
+      copy:
+        dest: "{{ project_dir }}/requirements.txt"
+        content: |
+          fastapi==0.136.1
+          uvicorn==0.47.0
+          psycopg==3.3.4
+          psycopg-binary==3.3.4
+          psycopg-pool==3.3.1
+          pydantic==2.13.4
+          PyJWT==2.12.1
+          cryptography==48.0.0
+          bcrypt==5.0.0
+          passlib==1.7.4
+          aiosmtplib==5.1.0
+          email-validator==2.3.0
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: 1.3.а. Инициализировать виртуальное окружение venv через Python 3.11
+      command: "python3 -m venv {{ venv_dir }}" # Вызываем системный python3
+      args:
+        creates: "{{ venv_dir }}/bin/activate"
+
+    - name: 1.3.б. Установка PIP-пакетов внутрь созданного виртуального окружения
+      pip:
+        requirements: "{{ project_dir }}/requirements.txt"
+        executable: "{{ venv_dir }}/bin/pip"
+      register: pip_install_result
+    - name: 1.4. Вывод статуса установки пакетов
+      debug:
+        msg: "Синхронизация пакетов завершена успешно. Изменений внесено: {{ pip_install_result.changed }}"
+
+    - name: 1.5.а. Создать системную группу pgrights
+      group:
+        name: pgrights
+        state: present
+        system: yes
+
+    - name: 1.5.б. Создать системного пользователя pgrights для изоляции бэкенда
+      user:
+        name: pgrights
+        group: pgrights
+        shell: /sbin/nologin # Запрещает интерактивный вход в систему для безопасности
+        create_home: no
+        system: yes
+        state: present
+
+    - name: 1.6. Копировать файлы исходного кода Python на сервер РЕД ОС
+      copy:
+        src: "src/{{ item }}"  # <- ИСПРАВЛЕНО: Ansible возьмет файлы из локальной папки src/
+        dest: "{{ project_dir }}/{{ item }}"
+        owner: pgrights
+        group: pgrights
+        mode: '0644'
+      with_items:
+        - main.py
+        - panel_users.py
+        - smtp.py
+        - utils.py
+
+    - name: 1.6.1 Скомпилировать users модуль из шаблона с подстановкой usertoken переменной
+      template:
+        src: "src/users.py.j2"  # На стороне Ansible-репозитория файл лежит тут же
+        dest: "{{ project_dir }}/users.py"
+        owner: pgrights
+        group: pgrights
+        mode: '0644'
+
+
+    - name: 1.7. Установить правильного владельца на корневой каталог и окружение
+      file:
+        path: "{{ project_dir }}"
+        owner: pgrights
+        group: pgrights
+        recurse: yes # Рекурсивно выдает права pgrights на .venv и все вложенные логи
+
+    - name: 2.1. Создать локальную папку для хранения секретов на управляющей машине
+      delegate_to: localhost
+      become: no
+      file:
+        path: "./.secrets"
+        state: directory
+        mode: '0700'
+
+    - name: 2.2. Автоматически сгенерировать валидный Fernet MASTER_KEY (только один раз)
+      delegate_to: localhost
+      become: no
+      shell: "{{ venv_dir }}/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+      register: generated_fernet_key
+      args:
+        creates: "./.secrets/master.key"
+      no_log: true
+
+    - name: 2.3. Зафиксировать сгенерированный мастер-ключ в локальный файл
+      delegate_to: localhost
+      become: no
+      copy:
+        content: "{{ generated_fernet_key.stdout }}"
+        dest: "./.secrets/master.key"
+        mode: '0600'
+      when: generated_fernet_key.changed
+
+    - name: 2.4. Считать MASTER_KEY из файла для подстановки в шаблон
+      delegate_to: localhost
+      become: no
+      set_fact:
+        final_master_key: "{{ lookup('file', './.secrets/master.key') }}"
+
+    - name: 2.5. Генерация файла конфигурации .env по шаблону
+      template:
+        src: env.j2
+        dest: "{{ project_dir }}/.env"
+        owner: pgrights  # Читать файл сможет только пользователь pgrights
+        group: pgrights  # И одноименная группа
+        mode: '0600'     # Строгие права: -rw-------
+      vars:
+        dynamic_master_key: "{{ final_master_key }}"
+
+    - name: Шаг 3. Установка и настройка PostgreSQL 18 из репозитория РЕД ОС
+      block:
+        - name: 3.1. Установить сервер PostgreSQL 18 и contrib-расширения из локальной репы
+          dnf:
+            name:
+              - postgresql18
+              - postgresql18-server
+              - postgresql18-contrib
+            state: present
+
+        - name: 3.2. Проверить, инициализирована ли уже база данных версии 18
+          stat:
+            path: /var/lib/pgsql/18/data/PG_VERSION
+          register: pg_data_status
+
+        - name: 3.2.а. ПРИНУДИТЕЛЬНАЯ ЗАЧИСТКА (сработает только если база была повреждена)
+          shell: |
+            systemctl stop postgresql-18.service
+            rm -rf /var/lib/pgsql/18/data
+          ignore_errors: yes
+          when: not pg_data_status.stat.exists
+
+        - name: 3.3. Инициализировать чистый кластер PostgreSQL 18 с нуля
+          command: "/usr/pgsql-18/bin/postgresql-18-setup initdb"
+          when: not pg_data_status.stat.exists
+          
+        - name: 3.3.а. Развернуть защищенный конфигурационный файл pg_hba.conf из шаблона
+          template:
+            src: pg_hba.conf.j2
+            dest: /var/lib/pgsql/18/data/pg_hba.conf
+            owner: postgres
+            group: postgres
+            mode: '0600' # Права 600 гарантируют, что правила авторизации не прочтет никто, кроме СУБД
+          register: pg_hba_config
+
+        - name: 3.4. Запустить чистую службу PostgreSQL и включить её в автозагрузку системы
+          systemd:
+            name: "postgresql-18.service"
+            state: started
+            enabled: yes
+
+        - name: 3.5.а. Сгенерировать полный SQL-скрипт бэкенда из комплексного шаблона
+          template:
+            src: db_schema.sql.j2
+            dest: /tmp/complete_init.sql
+            owner: postgres
+            group: postgres
+            mode: '0600'
+
+        - name: 3.5.б. Накатить структуру таблиц, индексы и гранты на СУБД РЕД ОС
+          command: "/usr/pgsql-18/bin/psql -h /tmp -f /tmp/complete_init.sql"
+          become: yes
+          become_user: postgres
+          ignore_errors: yes
+
+        - name: 3.5.в Выполнить рестарс службы PostgreSQL
+          systemd:
+            name: "postgresql-18.service"
+            state: restarted
+
+        - name: 3.5.г. Удалить временный SQL-скрипт с диска (ИБ-гигиена)
+          file:
+            path: /tmp/complete_init.sql
+            state: absent
+  
+    - name: Шаг 4. Настройка и запуск системной службы FastAPI
+      block:
+        - name: 4.1. Развернуть конфигурационный файл службы Systemd
+          template:
+            src: pgrights.service.j2
+            dest: /etc/systemd/system/pgrights.service
+            owner: root
+            group: root
+            mode: '0644'
+          register: systemd_config
+
+        - name: 4.2. Перезагрузить конфигурацию Systemd (если файл изменился)
+          systemd:
+            daemon_reload: yes
+          when: systemd_config.changed
+
+        - name: 4.3. Включить автозагрузку и запустить службу pgrights
+          systemd:
+            name: pgrights.service
+            state: restarted
+            enabled: yes
+
+    - name: Шаг 5. Установка Nginx, генерация SSL и подготовка каталога фронтенда
+      block:
+        - name: 5.1. Установить веб-сервер Nginx из репозитория РЕД ОС
+          dnf:
+            name: nginx
+            state: present
+
+        - name: 5.2. Обеспечить наличие директории для фронтенда панели
+          file:
+            path: /var/www/pgrights_frontend
+            state: directory
+            owner: nginx
+            group: nginx
+            mode: '0755'
+            
+        - name: 5.2.а. Обеспечить наличие корневой директории фронтенда
+          file:
+            path: /var/www/pgrights_frontend
+            state: directory
+            owner: nginx
+            group: nginx
+            mode: '0755'
+
+        - name: 5.2.б. Скопировать всю структуру файлов и папок фронтенда на РЕД ОС
+          # Модуль synchronize берёт локальную папку frontend и зеркалирует её на сервер
+          synchronize:
+            src: "frontend/" # Косая черта в конце обязательна, чтобы скопировать содержимое, а не саму папку
+            dest: "/var/www/pgrights_frontend/"
+            archive: yes     # Сохраняет права доступа, времена изменений и symlinks
+            recursive: yes   # Рекурсивно обходит вложенные папки css/ и js/
+          register: frontend_copy
+
+        - name: 5.2.в. Назначить ИБ-права и владельца nginx на все скопированные файлы
+          file:
+            path: /var/www/pgrights_frontend
+            owner: nginx
+            group: nginx
+            mode: '0644'     # Права -rw-r--r-- на файлы статики
+            recurse: yes     # Применить ко всем вложенным объектам
+
+        - name: 5.2.г. Исправить права на исполнение для поддиректорий фронтенда
+          # Папкам css/ и js/ нужен флаг +x (mode 0755), иначе веб-сервер не сможет зайти внутрь них
+          shell: "find /var/www/pgrights_frontend -type d -exec chmod 0755 {} +"
+          when: frontend_copy.changed
+
+        - name: 5.3. Проверить, сгенерирован ли уже SSL-ключ безопасности
+          stat:
+            path: /etc/pki/tls/private/pgrights.key
+          register: ssl_key_status
+
+        - name: 5.4. Автоматически сгенерировать приватный ключ и сертификат в системные папки РЕД ОС
+          command: >
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048
+            -keyout /etc/pki/tls/private/pgrights.key
+            -out /etc/pki/tls/certs/pgrights.crt
+            -subj "/C=RU/ST=Moscow/L=Moscow/O=SecurePostgreSQL/OU=IT/CN={{ssl_hostname}}"
+          when: not ssl_key_status.stat.exists
+          # Ключи запишутся в эталонные папки /etc/pki/tls/...
+
+        - name: 5.5. Ограничить права на приватный SSL-ключ (ИБ-гигиена)
+          file:
+            path: /etc/pki/tls/private/pgrights.key
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: 5.6. Развернуть главный конфигурационный файл nginx.conf
+          template:
+            src: nginx.conf.j2
+            dest: /etc/nginx/nginx.conf
+            owner: root
+            group: root
+            mode: '0644'
+          register: nginx_main_config
+
+        - name: 5.7. Развернуть защищенную конфигурацию проксирования pgrights.conf
+          template:
+            src: pgrights.conf.j2
+            dest: /etc/nginx/conf.d/pgrights.conf
+            owner: root
+            group: root
+            mode: '0644'
+          register: nginx_site_config
+
+        - name: 5.8. Запустить службу Nginx и включить её в автозагрузку системы
+          systemd:
+            name: nginx
+            state: started
+            enabled: yes
+
+        - name: 5.9. Перезапустить Nginx для применения SSL и шаблонов (при их изменении)
+          systemd:
+            name: nginx
+            state: restarted
+          when: nginx_main_config.changed or nginx_site_config.changed or not ssl_key_status.stat.exists
+
+    - name: 6.1. Ограничить максимальный размер системных логов в journald.conf
+      community.general.ini_file:
+        path: /etc/systemd/journald.conf
+        section: Journal
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+        no_extra_spaces: yes
+      loop:
+        - { option: 'SystemMaxUse', value: '2G' }
+        - { option: 'RuntimeMaxUse', value: '500M' }
+      register: journald_config
+
+    - name: 6.2. Перезапустить службу логов systemd-journald для фиксации лимитов
+      systemd:
+        name: systemd-journald
+        state: restarted
+      when: journald_config.changed
+
+    - name: 6.3. Отключить Firewalld (межсетевой экран)
+      systemd:
+        name: firewalld
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: 6.4. Полностью отключить SELinux в файле конфигурации
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX=disabled'
+      register: selinux_config
+
+    - name: 6.5. Отправить сервер РЕД ОС в перезагрузку без ожидания
+      shell: "sleep 2 && shutdown -r now 'Ansible SELinux Reboot'"
+      async: 1
+      poll: 0
+      when: selinux_config.changed

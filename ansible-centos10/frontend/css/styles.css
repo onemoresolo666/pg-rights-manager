@@ -1,0 +1,838 @@
+/* ================================================================= */
+/* БАЗОВЫЕ НАСТРОЙКИ ЭКРАНА И ЧИСТЫЙ СОВРЕМЕННЫЙ ШРИФТ SANS-SERIF    */
+/* ================================================================= */
+body { 
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; 
+    background-color: #f8f9fa !important; 
+    color: #212529 !important; 
+    padding: 40px !important; 
+    margin: 0 !important; 
+}
+.container-fluid { 
+    max-width: 1300px !important; 
+    margin: 0 auto !important; 
+}
+.text-muted { color: #6c757d !important; }
+.mb-0 { margin-bottom: 0 !important; }
+.mb-3 { margin-bottom: 1rem !important; }
+.my-4 { margin-top: 1.5rem !important; margin-bottom: 1.5rem !important; }
+.fw-bold { font-weight: 700 !important; }
+.small { font-size: .875em !important; }
+.fs-2 { font-size: 2rem !important; }
+
+/* 1. КАРКАС И ОБЩАЯ ПОДЛОЖКА МЕНЮ ВКЛАДОК */
+#mainTabs, 
+.nav-tabs,
+html body #mainTabs {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important; /* Промежуток между вкладками */
+    border-bottom: 1px solid #e2e8f0 !important; /* Изящная тонкая нижняя линия сланцевого цвета */
+    background-color: #f8fafc !important; /* Легкий, матовый пастельный фон подложки */
+    padding: 6px 10px !important;
+    border-radius: 10px 10px 0 0 !important;
+    margin-bottom: 20px !important;
+}
+
+/* 2. БАЗОВЫЙ СТИЛЬ НЕАКТИВНЫХ ВКЛАДОК */
+#mainTabs .nav-link,
+.nav-tabs .nav-link {
+    height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 16px !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important; /* Плотный шрифт */
+    color: #64748b !important; /* Графитовый тон текста */
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important; /* Полностью убираем резкие прямоугольные рамки */
+    border-radius: 6px !important;
+    transition: all 0.22s ease-in-out !important; /* Плавная анимация отклика */
+    cursor: pointer !important;
+}
+
+/* Интерактивный ховер-эффект: вкладка мягко подсвечивается серым при наведении */
+#mainTabs .nav-link:hover,
+.nav-tabs .nav-link:hover {
+    color: #1e293b !important; /* Текст становится темнее и четче */
+    background-color: #e2e8f0 !important; /* Мягкий матовый пастельный фон */
+}
+
+/* 3. СТИЛЬ АКТИВНОЙ (ВЫБРАННОЙ) ВКЛАДКИ */
+#mainTabs .nav-link.active,
+.nav-tabs .nav-link.active {
+    background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%) !important;
+    background-color: #e2e8f0 !important;
+    color: #1e293b !important; /* Чёткий, читаемый глубокий графитовый цвет текста */
+    -webkit-text-fill-color: #1e293b !important;
+    border: 1px solid #94a3b8 !important; /* Ровная стальная рамка, один в один как у кнопок */
+    border-color: #94a3b8 !important;
+    font-weight: 700 !important;
+}
+
+/* ================================================================= */
+/* ЕДИНЫЙ СТИЛЬ ДЛЯ КНОПОК ПРОЕКТА (ТЁМНЫЙ СТАЛЬНОЙ ГРАДИЕНТ)        */
+/* ================================================================= */
+.btn, 
+.btn-primary, 
+.btn-success, 
+.btn-danger, 
+.btn-submit-action, 
+.btn-login, 
+button, 
+[type="submit"],
+#systemRolesModal button,
+#multiDbModal button {
+ display: inline-flex !important;
+ align-items: center !important;
+ justify-content: center !important;
+ background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%) !important;
+ border: 1px solid #94a3b8 !important; 
+ color: #475569 !important; /* Графитовый читаемый цвет текста */
+ font-weight: 700 !important;
+ border-radius: 6px !important; /* Скругление углов */
+ box-shadow: 0 3px 6px rgba(15, 23, 42, 0.1) !important;
+ transition: all 0.2s ease-in-out !important;
+ cursor: pointer !important;
+ text-shadow: none !important;
+ padding: 0 15px !important;
+ box-sizing: border-box !important;
+ height: 34px !important;
+ font-size: 0.88rem !important;
+ -webkit-text-fill-color: #475569 !important;
+}
+
+/* Красивый интерактивный отклик при наведении: кнопка плавно белеет */
+.btn:hover, 
+.btn-primary:hover, 
+.btn-success:hover, 
+.btn-danger:hover, 
+.btn-submit-action:hover, 
+button:hover, 
+[type="submit"]:hover,
+#systemRolesModal button:hover,
+#multiDbModal button:hover {
+ background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%) !important;
+ border-color: #64748b !important; 
+ color: #0f172a !important; 
+ -webkit-text-fill-color: #0f172a !important;
+ box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18) !important; /* Объемная тень парения */
+ transform: translateY(-1px) !important; /* Мягкий взлет */
+}
+
+
+#loginContainer .text-danger,
+#loginContainer #loginAlert > div,
+html body #loginContainer div[style*="color: red"],
+html body #loginContainer .alert-danger {
+    background-color: #fef2f2 !important;
+    border: 1px solid #fca5a5 !important;
+    color: #991b1b !important;
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    padding: 12px 16px !important;
+    border-radius: 8px !important;
+    margin-top: 15px !important;
+    margin-bottom: 5px !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+
+/* Автоматическая инъекция ИБ-значка предупреждения перед текстом ошибки */
+#loginContainer .text-danger::before,
+#loginContainer #loginAlert > div::before,
+html body #loginContainer .alert-danger::before {
+ content: "⚠️" !important;
+ font-size: 1rem !important;
+ display: inline-block !important;
+ flex-shrink: 0 !important;
+}
+
+
+/* Контур скрытия неактивных вкладок в Bootstrap */
+.tab-content > .tab-pane { display: none !important; }
+.tab-content > .tab-pane.active { display: block !important; }
+
+/* Стальной матовый оверлей модального окна */
+#systemRolesModal {
+    background: rgba(15, 23, 42, 0.4) !important;
+    backdrop-filter: blur(4px) !important;
+}
+#systemRolesModal > div {
+    background-color: #f8fafc !important; 
+    border: 1px solid #e2e8f0 !important;
+    border-left: 6px solid #475569 !important; 
+    border-radius: 12px !important;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important; 
+    padding: 25px 30px !important;
+    transition: all 0.3s ease !important;
+}
+#systemRolesModal div[style*="background-color: #f1f5f9"] {
+    background-color: #ffffff !important; 
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 10px 14px !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+}
+#systemRolesModal label {
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+    margin-bottom: 6px !important;
+    font-family: system-ui, sans-serif !important;
+}
+#modalSysRolesSelect {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+    background-color: #ffffff !important;
+    font-family: monospace !important; 
+    color: #334155 !important;
+}
+#systemRolesModal form button,
+#systemRolesModal form .btn,
+#systemRolesModal form [type="submit"] {
+    height: 38px !important;
+    width: 120px !important;
+    font-weight: 700 !important;
+    font-size: 0.9rem !important;
+    margin: 0 !important;
+    color: #1e293b !important; 
+}
+/* ================================================================= */
+/* ИНТЕРАКТИВНЫЕ ИБ-ЭФФЕКТЫ НЕОНОВОЙ ПОДСВЕТКИ И ФОРМЫ КНОПОК        */
+/* ================================================================= */
+
+.btn-login,
+#loginForm button,
+#loginContainer button {
+    width: 100% !important;
+    height: 46px !important; 
+    font-size: 1rem !important; 
+    font-weight: 700 !important; 
+    color: #475569 !important;
+    background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%) !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 3px 6px rgba(15, 23, 42, 0.1) !important;
+    box-sizing: border-box !important;
+}
+
+.btn-login:hover {
+    background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%) !important;
+    border-color: #64748b !important;
+    color: #0f172a !important;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18) !important;
+    transform: translateY(-1px) !important; /* Эффект парения кнопки логина */
+}
+
+/* ЗНАЧОК ВЫХОДА С НЕОНОВОЙ ИБ-ПОДСВЕТКОЙ В ШАПКЕ */
+.btn-logout-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    color: #64748b !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer !important;
+}
+
+.btn-logout-icon:hover {
+    color: #ef4444 !important;
+    background: #fef2f2 !important;
+    border-color: #fca5a5 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.35), 0 4px 6px rgba(239, 68, 68, 0.1) !important;
+}
+
+.btn-logout-icon:active {
+    transform: translateY(1px) !important;
+    box-shadow: 0 1px 2px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* ИНДИВИДУАЛЬНАЯ НЕОНОВАЯ ПОДСВЕТКА КНОПОК ТАБЛИЦ */
+.btn-table-action {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    color: #64748b !important; /* Серый цвет иконки в покое */
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.02) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer !important;
+}
+
+.btn-table-action:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    background: #f1f5f9 !important;
+    color: #94a3b8 !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: none !important;
+}
+
+.btn-table-action:active:not(:disabled) {
+    transform: translateY(1px) !important;
+}
+
+/* 1. Кнопка смены пароля — Вспышка синего неона */
+.btn-action-pass:hover:not(:disabled) {
+    color: #3b82f6 !important;
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3), 0 2px 4px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* 2. Кнопка блокировки статуса — Вспышка оранжевого неона */
+.btn-action-lock:hover:not(:disabled) {
+    color: #f97316 !important;
+    background: #fff7ed !important;
+    border-color: #fed7aa !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.3), 0 2px 4px rgba(249, 115, 22, 0.1) !important;
+}
+
+/* 3. Кнопка удаления аккаунта — Вспышка красного неона */
+.btn-action-delete:hover:not(:disabled) {
+    color: #ef4444 !important;
+    background: #fef2f2 !important;
+    border-color: #fca5a5 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3), 0 2px 4px rgba(239, 68, 68, 0.1) !important;
+}
+
+
+
+/* КОМПАКТНЫЙ КОНТУР ДЛЯ ЭЛЕМЕНТОВ ФОРМ ПАНЕЛИ */
+#rights form .form-select, 
+#rights form .form-control {
+    border: 1px solid #cbd5e1 !important; /* Родной серый бортик Bootstrap */
+}
+
+
+#rights > div.col-12 {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 6px solid #475569 !important;
+    border-radius: 12px !important;
+    padding: 30px !important;
+    box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.04) !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+#rights > div.col-12:hover {
+    border-left-color: #0f172a !important;
+}
+
+#rights > div.col-12 > div:first-child,
+#rights > div.col-12 > div[style*="background-color: #f1f5f9"],
+#rights > div.col-12 > div.card:first-of-type {
+    background-color: #f1f5f9 !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    display: flex !important;
+    width: 100% !important;
+}
+/* ================================================================= */
+/* СИСТЕМНЫЕ СТИЛИ КОДОВ, БЕЙДЖЕЙ И ИБ-ПОДСТВЕТКИ ФОКУСА ПОЛЕЙ       */
+/* ================================================================= */
+
+/* ЭФФЕКТ СИНЕЙ НЕОНОВОЙ ПОДСВЕТКИ ПРИ КЛИКЕ НА ИНПУТЫ И СЕЛЕКТОРЫ */
+.form-control:focus, 
+.form-select:focus, 
+select:focus, 
+input:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+    outline: none !important;
+}
+
+/* СТИЛИ ОШИБОК СУБД И КАТАЛОГОВ В ЖУРНАЛЕ ЛОГОВ */
+.table td code {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.85rem !important;
+    color: #d63384 !important;
+    background-color: #f8f9fa !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+}
+
+/* СИСТЕМНЫЕ БЕЙДЖИ СТАТУСОВ АДМИНИСТРАТОРОВ И ПОЛЬЗОВАТЕЛЕЙ */
+.badge { 
+    display: inline-block !important; 
+    padding: 0.35rem 0.65rem !important; 
+    font-size: .75rem !important; 
+    font-weight: 700 !important; 
+    line-height: 1 !important; 
+    color: #fff !important; 
+    text-align: center !important; 
+    white-space: nowrap !important; 
+    vertical-align: baseline !important; 
+    border-radius: 0.25rem !important; 
+}
+.bg-success { background-color: #198754 !important; }
+.bg-danger { background-color: #dc3545 !important; }
+.bg-secondary { background-color: #6c757d !important; }
+.status-success { color: #198754 !important; font-weight: bold !important; }
+.status-error { color: #dc3545 !important; font-weight: bold !important; }
+/* ================================================================= */
+/* МАТОВЫЕ СЕЛЕКТОРЫ, ИНТЕРАКТИВНОЕ ПАРЕНИЕ КНОПОК И АЛЕРТЫ СУБД     */
+/* ================================================================= */
+
+.btn:hover, 
+.btn-primary:hover, 
+.btn-success:hover, 
+.btn-danger:hover, 
+.btn-submit-action:hover, 
+button:hover, 
+[type="submit"]:hover {
+    background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%) !important; /* Кнопка плавно «оживает» и белеет */
+    border-color: #64748b !important; 
+    color: #0f172a !important; /* Угольный акцент для идеальной читаемости */
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18) !important; /* Глубокая объемная тень */
+    transform: translateY(-1px) !important; /* Мягкий взлет и парение над формой */
+}
+
+/* СИНХРОНИЗАЦИЯ ВСЕХ ВНУТРЕННИХ СЕЛЕКТОРОВ: УБИРАЕМ СИНЕЕ ВЫДЕЛЕНИЕ СТРОК */
+.form-select option,
+select option,
+#schemaTarget option,
+#schemaPrivilege option,
+#tablePrivilege option,
+#seqPrivilege option,
+#globalTargetServer option,
+#globalDatabase option,
+#globalRole option {
+    padding: 6px 10px !important;
+    border-radius: 4px !important;
+    margin-bottom: 2px !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    color: #334155 !important;
+}
+
+.form-select option:checked,
+select option:checked,
+#schemaTarget option:checked,
+#schemaPrivilege option:checked,
+#tablePrivilege option:checked,
+#seqPrivilege option:checked,
+#globalTargetServer option:checked,
+#globalDatabase option:checked,
+#globalRole option:checked {
+    background-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+/* СИСТЕМНЫЕ МАТОВЫЕ ИБ-УВЕДОМЛЕНИЯ ПАНЕЛИ (АЛЕРТЫ) */
+.alert { 
+    padding: 1rem !important; 
+    margin-bottom: 1rem !important; 
+    border: 1px solid transparent !important; 
+    border-radius: 0.25rem !important; 
+    position: relative !important; 
+}
+.alert-success { color: #0f5132 !important; background-color: #d1e7dd !important; border-color: #badbcc !important; }
+.alert-danger { color: #842029 !important; background-color: #f8d7da !important; border-color: #f5c2c7 !important; }
+
+/* КНОПКА ЗАКРЫТИЯ МОДАЛЬНЫХ ОКНО (КРЕСТИК) [INDEX_0.1.13] */
+button.btn-close { background: none !important; box-shadow: none !important; transform: none !important; border: none !important; color: #94a3b8 !important; font-size: 1.4rem !important; line-height: 1 !important; opacity: 0.7 !important; padding: 1rem !important; }
+button.btn-close:hover { opacity: 1 !important; color: #64748b !important; background: none !important; box-shadow: none !important; transform: none !important; }
+
+/* ================================================================= */
+/* УБИРАЕМ СИНЕВУ И СТАВИМ МАТОВЫЙ СТИЛЬ                             */
+/* ================================================================= */
+html body input:focus, 
+html body input:focus-visible, 
+html body input:active,
+html body select:focus,
+html body select:focus-visible,
+.form-control:focus,
+.form-select:focus,
+#rights select:focus,
+#rights input:focus,
+#rights *:focus,
+.tab-pane *:focus,
+*:focus {
+    outline: none !important;
+    border-color: #475569 !important;
+    box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.15) !important;
+    -webkit-box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.15) !important;
+}
+
+/* Избавляемся от дефолтной синевы Bootstrap при автозаполнении полей ввода */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1e293b !important;
+    box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+}
+/* ================================================================= */
+/* МАТОВЫЙ СТИЛЬ ОПЕРАТОРА ALL И ГЕОМЕТРИЧЕСКИЕ ФИКСЫ                */
+/* ================================================================= */
+
+select option[value="ALL"] {
+    font-weight: 800 !important;
+    color: #0f172a !important; 
+    background-color: #f1f5f9 !important; 
+    padding: 10px !important;
+}
+
+#tableSchemaTarget, 
+#schemaTarget,
+div[style*="width: 110px"] {
+    width: auto !important; 
+    min-width: 140px !important; 
+    max-width: 100% !important;
+}
+
+select.form-select {
+    padding-right: 30px !important; 
+    white-space: nowrap !important;
+}
+
+#createUserTab div[style*="width: 260px"],
+div[style*="width: 260px"] {
+    width: auto !important; 
+    min-width: 290px !important; 
+    flex-grow: 1 !important;
+}
+
+#createUserTab .form-label,
+.form-label {
+    white-space: nowrap !important;
+    display: inline-block !important;
+    margin-bottom: 6px !important;
+}
+
+#createUserTab form {
+    align-items: flex-end !important;
+    gap: 15px !important;
+}
+
+
+
+/* ================================================================= */
+/* СКЛЕИВАНИЕ ДЛЯ ВКЛАДКИ 1 (ПОЛЬЗОВАТЕЛИ)                           */
+/* ================================================================= */
+
+/* 1. ПРЕВРАЩАЕМ ПРОСТРАНСТВО ВКЛАДКИ 1 В ЕДИНУЮ ЦЕЛЬНУЮ ПЛИТУ */
+#createUserTab > div.col-12 {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    padding: 30px !important;
+    box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.04) !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+
+/* Удаляем рамки, тени, закругления и фоны у трех внутренних блоков */
+#createUserTab > div.col-12 > div.scope-block,
+#createUserTab > div.col-12 > div.card {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-left: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* 2. РАЗДЕЛИТЕЛЬНЫЕ ПОЛОСЫ: Прорезаем блоки мягким матовым пунктиром */
+#createUserTab > div.col-12 > div.scope-block:not(:last-of-type),
+#createUserTab > div.col-12 > div.card:not(:last-of-type) {
+    border-bottom: 2px dashed #cbd5e1 !important;
+    padding-bottom: 25px !important;
+    margin-bottom: 25px !important;
+}
+
+/* 3. ВЫРАВНИВАНИЕ ЛИНЕЙКИ КНОПОК «СОЗДАТЬ / УДАЛИТЬ / ВЫПОЛНИТЬ» */
+#createUserTab button[type="submit"],
+#createUserTab button {
+    width: 130px !important;
+    min-width: 130px !important;
+    max-width: 130px !important;
+    height: 38px !important;
+}
+/* ================================================================= */
+/* СТИЛЬ ОДНОРЯДНЫХ ОСЕЙ ПАНЕЛИ                                      */
+/* ================================================================= */
+
+/* 1. УДАЛЕНИЕ ПРОБЕЛОВ И СВЕРХПЛОТНЫЕ ВЕРТИКАЛЬНЫЕ ЗАЗОРЫ */
+#rights hr,
+#rights .my-4,
+#rights div.card > hr,
+.tab-pane#rights hr {
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+    padding: 0 !important;
+    height: 0 !important;
+    border: none !important;
+    border-top: 1px dashed #cbd5e1 !important;
+    opacity: 0.6 !important;
+}
+
+#rights h5,
+#rights .card-title {
+    margin-top: 0 !important;
+    margin-bottom: 4px !important;
+    font-size: 0.95rem !important;
+    color: #1e293b !important;
+}
+
+#schemaTarget,
+#schemaPrivilege,
+#tablePrivilege,
+#seqPrivilege,
+#rights select[multiple] {
+    height: 105px !important;
+    min-height: 105px !important;
+    max-height: 105px !important;
+    width: 300px !important;
+    min-width: 300px !important;
+    max-width: 300px !important;
+    box-sizing: border-box !important;
+}
+
+
+#schemaTarget {
+    width: 320px !important;
+    max-width: 320px !important;
+    min-width: 320px !important;
+}
+
+#tableSchemaTarget,
+#seqSchemaTarget,
+#rights select[id="tableSchemaTarget"],
+#rights select[id="seqSchemaTarget"] {
+    width: 320px !important;
+    max-width: 320px !important;
+    min-width: 320px !important;
+    box-sizing: border-box !important;
+}
+
+#rights select:not([multiple]),
+#rights input,
+#rights .form-select,
+#rights .form-control,
+#rights button[type="submit"] {
+    height: 34px !important;
+    font-size: 0.88rem !important;
+    box-sizing: border-box !important;
+}
+
+#rights .form-label,
+#rights form label {
+    margin-bottom: 3px !important;
+    font-size: 0.82rem !important;
+}
+
+#rights button[type="submit"] {
+    width: 130px !important;
+    min-width: 130px !important;
+    max-width: 130px !important;
+}
+/* ================================================================= */
+/* МОДЕРНИЗАЦИЯ СИСТЕМНЫХ УВЕДОМЛЕНИЙ И АЛЕРТОВ                      */
+/* ================================================================= */
+
+/* Глобальный контейнер для всех типов уведомлений */
+#alertContainer .alert,
+#loginAlert .alert,
+.alert {
+    padding: 10px 16px !important;    /* Ужали внутренние пробелы до аккуратного минимума */
+    border-radius: 8px !important;     /* Скругление углов под стиль панелей */
+    font-size: 0.88rem !important;     /* Компактный размер шрифта для чтения */
+    font-weight: 500 !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    margin-bottom: 12px !important;    /* Плотный прижим к верхней серой планке */
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.02) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    border-left: 4px solid transparent !important; /* Левый маркер статуса операции */
+}
+
+/* 1. УВЕДОМЛЕНИЕ ОБ УСПЕХЕ */
+.alert-success {
+    background-color: #f0fdf4 !important; /* Мягкий, мятный пастельный фон */
+    border: 1px solid #bbf7d0 !important;
+    border-left: 4px solid #22c55e !important; /* Насыщенная зеленая полоса успеха */
+    color: #166534 !important;               /* Глубокий хвойный читаемый цвет текста */
+}
+
+/* 2. УВЕДОМЛЕНИЕ ОБ ОШИБКЕ СУБД (CRITICAL / REVOKE) */
+.alert-danger {
+    background-color: #fef2f2 !important;
+    border: 1px solid #fecaca !important;
+    border-left: 4px solid #ef4444 !important;
+    color: #991b1b !important;
+}
+
+/* 3. ИНФОРМАЦИОННОЕ УВЕДОМЛЕНИЕ И ПРЕДУПРЕЖДЕНИЯ (WARNING) */
+.alert-warning {
+    background-color: #fffbeb !important;
+    border: 1px solid #fef3c7 !important;
+    border-left: 4px solid #f59e0b !important;
+    color: #92400e !important;
+}
+
+/* Кнопка закрытия алерта (крестик) */
+.alert .btn-close {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 14px !important;
+    height: 14px !important;
+    font-size: 0.75rem !important;
+    opacity: 0.5 !important;
+    background-size: 10px !important;
+    transition: opacity 0.2s ease-in-out !important;
+}
+
+.alert .btn-close:hover {
+    opacity: 0.9 !important;
+}
+
+
+/* ================================================================= */
+/* ЛАЗЕРНЫЕ ОСИ И ВОССТАНОВЛЕНИЕ СЕРЫХ РАМОК                         */
+/* ================================================================= */
+
+#rights form,
+#sequenceForm,
+html body #rights form,
+html body #sequenceForm {
+    display: flex !important;
+    gap: 20px !important;
+}
+
+#rights form select#tableScopeMode,
+#rights form select#seqScopeMode,
+#rights form > div:nth-child(1),
+#sequenceForm > div:nth-child(1) {
+    flex: none !important;
+    width: 120px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
+    box-sizing: border-box !important;
+}
+
+#rights form select#tableSchemaTarget,
+#rights form select#seqSchemaTarget,
+#rights form > div:nth-child(2),
+#sequenceForm > div:nth-child(2) {
+    flex: none !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    box-sizing: border-box !important;
+}
+
+#rights form > div:nth-child(3),
+#sequenceForm > div:nth-child(3) {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+
+
+/* ================================================================= */
+/* ДИЗАЙН: ОБЪЕМНАЯ ГЛЯНЦЕВАЯ ПАГИНАЦИЯ                              */
+/* ================================================================= */
+
+
+/* 1. БАЗОВЫЙ СТИЛЬ ДЛЯ ВСЕХ КНОПОК ПАГИНАЦИИ (ГЛЯНЦЕВЫЙ ГРАДИЕНТ) */
+#auditPagination button,
+#auditPagination .btn,
+#auditPagination a,
+#auditPagination strong {
+    background: linear-gradient(to bottom, #ffffff 0%, #f3f4f6 100%) !important; /* Плавный благородный градиент сверху вниз */
+    border: 1px solid #cbd5e1 !important;
+    border-color: #cbd5e1 !important;
+    color: #475569 !important; /* Уверенный темно-серый цвет текста */
+    font-size: 0.85rem !important; /* Четкий, отлично читаемый шрифт */
+    font-weight: 700 !important; /* Жирное начертание цифр и слов по эталону */
+    padding: 4px 14px !important; /* Просторные ровные отступы для объема */
+    min-width: 32px !important;
+    height: 32px !important; /* Фиксированная комфортная высота */
+    border-radius: 6px !important; /* Аккуратное, отчетливое скругление углов */
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4) !important; /* Внутренняя блик-тень для объема */
+    transition: all 0.1s ease-in-out !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-decoration: none !important;
+    margin: 0 3px !important; /* Зазор между кнопками */
+    box-sizing: border-box !important;
+}
+
+/* 2. АКТИВНАЯ ВЫБРАННАЯ СТРАНИЦА (ЭФФЕКТ ВДАВЛЕННОЙ КНОПКИ) */
+#auditPagination button.active,
+#auditPagination .btn.active,
+#auditPagination a.active,
+#auditPagination strong {
+    background: linear-gradient(to bottom, #e2e8f0 0%, #cbd5e1 100%) !important; /* Более глубокий, темный градиент */
+    border-color: #94a3b8 !important;
+    color: #0f172a !important; /* Насыщенный черный цвет активной цифры */
+    font-weight: 800 !important;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.06) !important; /* Внутренняя тень проваливания кнопки */
+    cursor: default !important;
+}
+
+/* 3. МЯГКИЙ ХОВЕР ПРИ НАВЕДЕНИИ МЫШКИ (АКТИВНЫЕ ПЕРЕХОДЫ КНОПОК 2 И ВПРЕД) */
+#auditPagination button:hover:not(:disabled),
+#auditPagination .btn:hover,
+#auditPagination a:hover {
+    background: linear-gradient(to bottom, #ffffff 0%, #e2e8f0 100%) !important;
+    border-color: #94a3b8 !important;
+    color: #1e293b !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+}
+
+/* 4. СТИЛИ ДЛЯ СИСТЕМНО ЗАБЛОКИРОВАННЫХ КНОПОК (НАПРИМЕР, «НАЗАД» НА ПЕРВОЙ СТРАНИЦЕ) */
+#auditPagination .disabled,
+#auditPagination [disabled="true"] {
+    opacity: 0.5 !important;
+    background: #f8fafc !important; /* Матовый блеклый фон */
+    color: #94a3b8 !important; /* Блеклый серый текст */
+    border-color: #e2e8f0 !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+}
+

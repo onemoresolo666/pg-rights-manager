@@ -1,0 +1,18 @@
+[Unit]
+Description=Secure Multi-Server PostgreSQL Rights Manager (FastAPI)
+After=network.target postgresql-18.service
+
+[Service]
+Type=simple
+User=pgrights
+Group=pgrights
+TimeoutStopSec=5
+WorkingDirectory={{ project_dir }}
+EnvironmentFile={{ project_dir }}/.env
+# ИСПРАВЛЕНО: Выставили хост 0.0.0.0, чтобы панель открывалась на Windows-хосте по Сетевому мосту
+ExecStart={{ venv_dir }}/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

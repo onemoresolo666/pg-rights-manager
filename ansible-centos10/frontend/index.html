@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <!-- ПОДКЛЮЧЕНИЕ ИБ-КОНТУРА СТИЛЕЙ -->
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- ПОДКЛЮЧЕНИЕ АВТОНОМНОГО РАНТАЙМА ЛОГИКИ -->
+    <meta charset="UTF-8">
+    <title>PostgreSQL Rights Manager</title>
+    <!-- Локальное подключение без внешних интернет-ресурсов и CDN -->
+    <link href="bootstrap.min.css" rel="stylesheet">
+ <style>
+
+</style>
+
+</head>
+<body class="bg-light">
+<!-- ========================================================================= -->
+<!-- ГЛОБАЛЬНЫЙ ПРЕМИУМ-КОНТЕЙНЕР ДЛЯ ВСЕХ ИБ-УВЕДОМЛЕНИЙ ПАНЕЛИ DBA           -->
+<!-- ========================================================================= -->
+<div id="alertContainer" style="position: fixed !important; top: 20px !important; left: 50% !important; transform: translateX(-50%) !important; width: 480px !important; z-index: 999999 !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;"></div>
+
+<!-- ========================================================================= -->
+<!-- ЭКРАН ВХОДА В СИСТЕМУ                                                     -->
+<!-- ========================================================================= -->
+<div id="loginContainer" style="display: flex !important; align-items: center !important; justify-content: center !important; min-height: 100vh !important; background-color: #f8fafc !important; box-sizing: border-box !important; width: 100% !important; padding: 20px !important;">
+    <div class="login-card" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; border-radius: 12px !important; padding: 40px !important; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04) !important; box-sizing: border-box !important; width: 100% !important; max-width: 440px !important; display: flex !important; flex-direction: column !important; gap: 24px !important;">
+        
+        <!-- ШАПКА КАРТОЧКИ ВХОДА -->
+        <div style="text-align: center !important; margin: 0 !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+            <h3 class="login-title" style="margin: 0 !important; font-weight: 800 !important; color: #1e293b !important; font-size: 1.6rem !important; letter-spacing: -0.03rem !important;">PG Rights Panel</h3>
+            <p style="color: #64748b !important; font-size: 0.88rem !important; margin: 0 !important; font-weight: 500 !important;">Введите учётные данные администратора</p>
+        </div>
+
+        <!-- ОФИЦИАЛЬНОЕ ИЗОЛИРОВАННОЕ МЕСТО ДЛЯ ВЫВОДА ОШИБОК АВТОРСКОГО ЯДРА JS -->
+        <div id="loginAlert" style="box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important;"></div>
+
+        <!-- ФОРМА АВТОРИЗАЦИИ -->
+        <form id="loginForm" onsubmit="submitLoginForm(event)" style="display: flex !important; flex-direction: column !important; gap: 18px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+            
+            <!-- Поле 1: Имя пользователя -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 6px !important; width: 100% !important; box-sizing: border-box !important;">
+                <label class="form-label small fw-bold" style="color: #334155 !important; margin: 0 !important; font-size: 0.82rem !important; white-space: nowrap !important;">Имя пользователя</label>
+                <input type="text" class="form-control login-input bg-white" id="loginUsername" placeholder="admin" required autocomplete="username" style="height: 38px !important; font-size: 0.9rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; width: 100% !important; box-sizing: border-box !important; padding: 0 12px !important;">
+            </div>
+
+            <!-- Поле 2: Пароль -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 6px !important; width: 100% !important; box-sizing: border-box !important;">
+                <label class="form-label small fw-bold" style="color: #334155 !important; margin: 0 !important; font-size: 0.82rem !important; white-space: nowrap !important;">Пароль</label>
+                <input type="password" class="form-control login-input bg-white" id="loginPassword" placeholder="••••••••" required autocomplete="current-password" style="height: 38px !important; font-size: 0.9rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; width: 100% !important; box-sizing: border-box !important; padding: 0 12px !important;">
+            </div>
+
+            <!-- Кнопка отправить -->
+            <button type="submit" class="btn btn-login fw-bold" style="width: 100% !important; height: 38px !important; font-size: 0.95rem !important; color: #ffffff !important; border-radius: 6px !important; margin-top: 15px !important; cursor: pointer !important; box-sizing: border-box !important;">Войти в систему</button>
+        </form>
+
+    </div>
+</div>
+
+<!-- ЗАЩИЩЁННЫЙ КОНТЕЙНЕР ПАНЕЛИ УПРАВЛЕНИЯ -->
+<div id="appContainer" style="display: none;">
+    <div class="container-fluid">
+        
+<!-- АВТОНОМНАЯ ШАПКА -->
+<div style="display: flex !important; justify-content: space-between !important; align-items: center !important; ...">
+    <div style="text-align: left !important; flex: 1 1 auto !important;">
+        <h2 style="...">PostgreSQL Rights Manager</h2>
+        <p style="...">Панель для управления привилегиями</p>
+    </div>
+    
+   <!-- БЕЙДЖ ПЕРЕД КНОПКОЙ ВЫХОДА! -->
+    <div style="display: flex !important; align-items: center !important; gap: 12px !important; text-align: right !important; flex: 0 0 auto !important; padding-left: 20px !important;">
+        
+        <!-- Глянцевый, закругленный бейдж сессии -->
+        <div id="ibActiveUserProfileCard" class="bg-white border" style="border-color: #cbd5e1 !important; border-radius: 20px !important; height: 36px !important; width: 160px !important; min-width: 160px !important; padding-left: 10px !important; padding-right: 10px !important; box-sizing: border-box !important; font-family: system-ui, sans-serif !important; display: flex !important; align-items: center !important; justify-content: center !important;">
+            <svg xmlns="http://w3.org" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px !important; flex-shrink: 0 !important;">
+                <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+            </svg>
+            <div style="display: flex !important; flex-direction: column !important; text-align: center !important; justify-content: center !important; line-height: 1.1 !important; width: 100% !important;">
+                <span id="ibActiveUserLogin" class="fw-bold" style="color: #0f172a !important; font-size: 0.8rem !important; text-transform: lowercase !important;">загрузка...</span>
+                <span id="ibActiveUserRoleBadge" class="badge text-uppercase" style="font-size: 0.55rem !important; padding: 1px 4px !important; font-weight: 800 !important; border-radius: 4px !important; margin-top: 1px !important; align-self: center !important;">-</span>
+            </div>
+        </div>
+
+        <!-- Оригинальная кнопка выхода из системы (Завершить сессию администратора) -->
+        <button type="button" class="btn-logout-icon" title="Завершить сессию" onclick="logoutSession()">
+            <svg xmlns="http://w3.org" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+        </button>
+    </div>
+</div>
+        
+        <!-- ПАНЕЛЬ ВКЛАДОК МЕНЮ -->
+        <ul class="nav nav-tabs mb-3" id="mainTabs">
+            <li class="nav-item"><button class="nav-link" data-bs-target="#createUserTab">Управление пользователями</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-target="#rights">Управление правами</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-target="#servers" onclick="loadServersRegistry()">Реестр серверов</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-target="#panelAdminTab" onclick="loadPanelUsers()">Администраторы панели</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#smtpTab" style="font-weight: 700 !important; font-family: system-ui, sans-serif !important;">Настройка почты</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-target="#auditTab" data-bs-toggle="tab" onclick="loadAuditLogs()">Журнал аудита</button></li>
+            <li class="nav-item" id="securityCreateUserTabNavItem" style="display: none; box-sizing: border-box !important;">
+            <button class="nav-link fw-bold" id="securityCreateUser-tab" data-bs-toggle="tab" data-bs-target="#securityCreateUserTab" type="button" role="tab" style="color: #b45309 !important; background-color: #fef3c7 !important; border: 1px solid #fde68a !important; border-radius: 6px !important; margin-left: 8px !important;">➕ Создать пользователя</button>
+            </li>
+            <li class="nav-item" id="tabSecurityRights" style="display: none; box-sizing: border-box !important;">
+                <button class="nav-link fw-bold" id="tabSecurityRights-btn" data-bs-toggle="tab" data-bs-target="#panelSecurityRightsTab" type="button" role="tab" style="color: #b45309 !important; background-color: #fef3c7 !important; border: 1px solid #fde68a !important; border-radius: 6px !important; margin-left: 8px !important;">🛡️ Управление правами</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="nav-tabContent" style="box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important; height: auto !important;">
+
+<!-- ========================================================================= -->
+<!-- ВКЛАДКА 1: УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ POSTGRESQL                           -->
+<!-- ========================================================================= -->
+<div class="tab-pane fade show active" id="createUserTab" aria-label="Управление пользователями" role="tabpanel" style="box-sizing: border-box !important;">
+    <div style="display: flex !important; flex-direction: column !important; gap: 12px !important; width: 100% !important; box-sizing: border-box !important; padding: 0 !important; margin: 0 !important;">
+
+        <!-- ГЛАВНАЯ ЕДИНАЯ МАТОВАЯ СУПЕР-ПЛИТА КАРТОЧКИ (РАСКАТКА НА ВСЁ ОКНО W-100) -->
+        <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; gap: 30px !important; margin-top: 5px !important;">
+
+            <!-- ЯРУС 1: СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ POSTGRESQL (КОМПАКТНЫЙ РЯД СЛЕВА, КНОПКА СПРАВА) -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 15px !important; box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important;">
+                <div style="margin: 0 !important;">
+                    <h5 style="margin: 0 0 4px 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important;">Создание пользователя PostgreSQL или изменение его пароля</h5>
+                    <small class="text-secondary" style="font-size: 0.82rem !important;">Пароль на 16 символов генерируется СУБД, создается роль с флагом LOGIN и доступы отправляются на Email.</small>
+                </div>
+                
+                <form id="CreateNewUserForm" onsubmit="event.preventDefault(); submitCreateUserAction(event);" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 20px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+                    <!-- 1. СЕРВЕР -->
+                    <div style="width: 260px !important; min-width: 260px !important; max-width: 260px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                       <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">1. Введите или выберите сервер</label>
+                        <input type="text" class="form-control bg-white" id="createUserTargetServer" list="lockUserServerDatalist" placeholder="Начните вводить инстанс..." required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <!-- 2. ПОЛЬЗОВАТЕЛЬ -->
+                    <div style="width: 260px !important; min-width: 260px !important; max-width: 260px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">2. Имя пользователя</label>
+                        <input type="text" class="form-control bg-white" id="createUserName" placeholder="ivan_ivanov" pattern="[a-zA-Z0-9_]+" required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <!-- 3. EMAIL -->
+                    <div style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">3. Email сотрудника</label>
+                        <input type="email" class="form-control bg-white" id="createUserEmail" placeholder="user@company.domen" required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <div style="flex: 1 !important;"></div>
+                    <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; align-items: flex-end !important;">
+                        <button type="submit" class="btn fw-bold" style="width: 140px !important; height: 38px !important; font-size: 0.9rem !important; margin: 0 !important; border-radius: 6px !important;">Отправить</button>
+                    </div>
+                </form>
+            </div>
+
+            <div style="border-top: 1.5px dashed #94a3b8 !important; width: 100% !important; height: 0 !important; margin: 5px 0 !important; padding: 0 !important; opacity: 1 !important;"></div>
+
+            <!-- ЯРУС 2: УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 15px !important; box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important;">
+                <div style="margin: 0 !important;">
+                    <h5 style="margin: 0 0 4px 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important;">Удаление пользователя (Каскадное)</h5>
+                    <small class="text-danger fw-bold" style="font-size: 0.82rem !important;">Внимание! Будет выполнена команда DROP OWNED BY / DROP ROLE. Все привилегии роли будут каскадно отозваны из всех БД.</small>
+                </div>
+                
+                <form onsubmit="event.preventDefault(); submitDeleteUserAction();" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 20px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+                    <!-- 1. СЕРВЕР -->
+                    <div style="width: 260px !important; min-width: 260px !important; max-width: 260px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">1. Введите или выберите сервер</label>
+                        <input type="text" class="form-control bg-white" id="deleteUserTargetServer" list="deleteUserServerDatalist" placeholder="Начните вводить инстанс..." required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <!-- 2. ПОЛЬЗОВАТЕЛЬ -->
+                    <div style="width: 260px !important; min-width: 260px !important; max-width: 260px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">2. Введите или выберите пользователя</label>
+                        <input type="text" class="form-control bg-white" id="deleteUserSelect" list="deleteUserDatalist" placeholder="Начните вводить имя..." required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <div style="flex: 1 !important;"></div>
+                    <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; align-items: flex-end !important;">
+                        <button type="submit" class="btn fw-bold" style="width: 140px !important; height: 38px !important; font-size: 0.9rem !important; margin: 0 !important; border-radius: 6px !important;">Удалить</button>
+                    </div>
+                </form>
+                <datalist id="deleteUserServerDatalist"></datalist>
+                <datalist id="deleteUserDatalist"></datalist>
+            </div>
+
+            <div style="border-top: 1.5px dashed #94a3b8 !important; width: 100% !important; height: 0 !important; margin: 5px 0 !important; padding: 0 !important; opacity: 1 !important;"></div>
+
+            <!-- ЯРУС 3: БЛОКИРОВКА / РАЗБЛОКИРОВКА ПОЛЬЗОВАТЕЛЯ -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 15px !important; box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important;">
+                <div style="margin: 0 !important;">
+                    <h5 style="margin: 0 0 4px 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important;">Блокировка / Разблокировка пользователя</h5>
+                    <small class="text-secondary" style="font-size: 0.82rem !important;">Управление флагом LOGIN / NOLOGIN. Блокировка запрещает авторизоваться, сохраняя права и объекты роли.</small>
+                </div>
+                
+                <form onsubmit="event.preventDefault(); submitLockUserAction();" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 20px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+                    <!-- 1. СЕРВЕР -->
+                    <div style="width: 260px !important; min-width: 260px !important; max-width: 260px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">1. Введите или выберите сервер</label>
+                        <input type="text" class="form-control bg-white" id="lockUserTargetServer" list="lockUserServerDatalist" placeholder="Начните вводить инстанс..." required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <!-- 2. ПОЛЬЗОВАТЕЛЬ -->
+                    <div style="width: 260px !important; min-width: 260px !important; max-width: 260px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">2. Введите или выберите пользователя</label>
+                        <input type="text" class="form-control bg-white" id="lockUserSelect" list="lockUserDatalist" placeholder="Начните вводить имя..." required style="height: 38px !important; font-size: 0.88rem !important;">
+                    </div>
+                    <!-- 3. ДЕЙСТВИЕ -->
+                    <div style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                        <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">3. Действие администратора</label>
+                        <select class="form-select bg-white" id="lockUserAction" required style="height: 38px !important; font-size: 0.88rem !important;">
+                            <option value="LOCK" selected>Блокировать (NOLOGIN)</option>
+                            <option value="UNLOCK">Разблокировать (LOGIN)</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1 !important;"></div>
+                    <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; align-items: flex-end !important;">
+                        <button type="submit" class="btn fw-bold" style="width: 140px !important; height: 38px !important; font-size: 0.9rem !important; margin: 0 !important; border-radius: 6px !important;">Выполнить</button>
+                    </div>
+                </form>
+            </div>
+
+        </div> <!-- ЗАКРЫЛИ ЕДИНУЮ ПЛИТУ КАРТОЧКИ ПЕРВОЙ СТРАНИЦЫ -->
+    </div> <!-- ЗАКРЫЛИ ВНУТРЕННИЙ FLEX-КОНТЕЙНЕР ВКЛАДКИ-->
+</div> <!-- ЗАКРЫЛИ ТЕГ ПЕРВОЙ ВКЛАДКИ ID="CREATEUSERTAB" -->
+
+<!-- ========================================================================= -->
+<!-- ОРИГИНАЛЬНЫЙ ПОДВАЛ ДАТАЛИСТОВ ДЛЯ БЛОКОВ 1 И 3                           -->
+<!-- ========================================================================= -->
+<datalist id="lockUserServerDatalist"></datalist>
+<datalist id="lockUserDatalist"></datalist>
+
+
+
+        <!-- ======================================================================= -->
+        <!-- ВКЛАДКА 2: ЕДИНАЯ ПАНЕЛЬ УПРАВЛЕНИЯ ПРАВАМИ                             -->
+        <!-- ======================================================================= -->
+        <div class="tab-pane fade" id="rights" aria-label="Управление правами" role="tabpanel" style="box-sizing: border-box !important;">
+
+            <div style="display: flex !important; flex-direction: column !important; gap: 12px !important; width: 100% !important; box-sizing: border-box !important; padding: 0 !important; margin: 0 !important;">
+                
+                <!-- ГЛАВНАЯ ПАНЕЛЬ СУБД -->
+                    <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; gap: 30px !important;">
+                    
+                    <!-- ВЕРХНЯЯ СИНХРОННАЯ ПАНЕЛЬ СЕЛЕКТОРОВ КОНФИГУРАЦИИ №1-3 -->
+                    <div style="background-color: #f1f5f9 !important; border: 1px solid rgba(0, 0, 0, 0.06) !important; border-radius: 8px !important; padding: 12px 16px !important; display: flex !important; align-items: flex-end !important; justify-content: space-between !important; gap: 20px !important; width: 100% !important; box-sizing: border-box !important;">
+                        <div style="flex: 1 !important; display: flex !important; flex-direction: column !important;">
+                            <label style="margin-bottom: 4px !important; font-weight: 700 !important; font-size: 0.82rem !important; color: #334155 !important; font-family: system-ui, sans-serif !important;">1. Выберите сервер</label>
+                                                            <input type="text" class="form-control bg-white" id="globalTargetServer" placeholder="Начните вводить инстанс..." style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; box-sizing: border-box !important; border: 1px solid #64748b !important; border-color: #cbd5e1 !important; border-radius: 6px !important;">
+                        </div>
+                        <div style="flex: 1 !important; display: flex !important; flex-direction: column !important;">
+                            <label style="margin-bottom: 4px !important; font-weight: 700 !important; font-size: 0.82rem !important; color: #334155 !important; font-family: system-ui, sans-serif !important;">2. Выберите базу данных</label>
+                                                              <input type="text" class="form-control bg-white" id="globalDatabase" list="globalDatabaseDatalist" placeholder="Сначала выберите сервер..." disabled style="height: 34px !important; font-size: 0.88rem !important; border-radius: 6px !important; flex: 1 !important; box-sizing: border-box !important; border: 1px solid #cbd5e1 !important;">
+
+                        </div>
+                        <div style="flex: 1.2 !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                            <label style="margin-bottom: 0 !important; font-weight: 700 !important; font-size: 0.82rem !important; color: #334155 !important; font-family: system-ui, sans-serif !important;">3. Выберите пользователя</label>
+                            <div style="display: flex !important; gap: 10px !important; width: 100% !important; align-items: center !important;">
+                                                                    <input type="text" class="form-control bg-white" id="globalRole" list="globalRoleDatalist" placeholder="Сначала выберите базу..." disabled style="height: 34px !important; font-size: 0.88rem !important; border-radius: 6px !important; flex: 1 !important; box-sizing: border-box !important; border: 1px solid #cbd5e1 !important;">
+                                                                <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center btn-pg-settings" style="height: 34px !important; width: 34px !important; min-width: 34px !important; max-width: 34px !important; padding: 0 !important; border-radius: 6px !important; background-color: #ffffff !important; border-color: #cbd5e1 !important;" onclick="openSystemRolesModal()" title="Настройка системных ролей pg_*">
+                                    <svg xmlns="http://w3.org" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="gear-icon">
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                    </svg>
+                                </button>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- УРОВЕНЬ 1: DATABASE -->
+                    <div style="width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;">
+                        <h5 style="font-size: 0.95rem !important; font-weight: 700 !important; margin-top: 0 !important; margin-bottom: 4px !important; color: #1e293b !important; font-family: system-ui, sans-serif !important;">Уровень базы данных (DATABASE)</h5>
+                    <form onsubmit="submitForm(event, 'DATABASE')" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 16px !important; width: 100% !important; margin: 0 !important; padding: 0 0 12px 0 !important; height: auto !important; box-sizing: border-box !important;">
+                            
+        <!-- 1. ЛЕВАЯ КОЛОНКА -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Действие</label>
+    <select class="form-select" id="dbAction" style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; box-sizing: border-box !important; border-radius: 6px !important; background-color: #ffffff !important;">
+        <option value="GRANT">GRANT</option>
+        <option value="REVOKE">REVOKE</option>
+    </select>
+</div>
+
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Привилегия</label>
+    <select class="form-select" id="dbPrivilege" style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; box-sizing: border-box !important; border-radius: 6px !important; background-color: #ffffff !important;">
+        <option value="CONNECT">CONNECT</option>
+        <option value="CREATE">CREATE</option>
+        <option value="ALL">ALL</option>
+    </select>
+</div>
+                
+<div style="flex: 1 !important; margin: 0 !important; padding: 0 !important;"></div>
+
+                            
+                            <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; align-items: flex-end !important; margin: 0 !important; padding: 0 !important;">
+                                <button type="submit" class="btn btn-primary" style="width: 130px !important; height: 34px !important; font-size: 0.88rem !important; font-weight: 700 !important; margin: 0 !important; border-radius: 6px !important; box-sizing: border-box !important;">Применить</button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    
+<div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: -5px 0 -8px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important;"></div>
+
+
+                    <!-- УРОВЕНЬ 2: SCHEMA -->
+                    <div style="width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;">
+                        <h5 style="font-size: 0.95rem !important; font-weight: 700 !important; margin-top: 0 !important; margin-bottom: 4px !important; color: #1e293b !important; font-family: system-ui, sans-serif !important;">Уровень схемы (SCHEMA)</h5>
+                        <form onsubmit="submitForm(event, 'SCHEMA')" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: space-between !important; gap: 20px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; height: auto !important;">
+                            <div style="width: 320px !important; min-width: 320px !important; max-width: 320px !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; gap: 4px !important;">
+                                <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Схемы (зажмите Ctrl)</label>
+                                <select class="form-select" id="schemaTarget" multiple style="height: 105px !important; font-size: 0.88rem !important; width: 100% !important; box-sizing: border-box !important;"><option value="">Выберите базу...</option></select>
+                            </div>
+                            <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; gap: 4px !important;">
+                                <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Действие</label>
+                                <select class="form-select" id="schemaAction" style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; box-sizing: border-box !important;"><option value="GRANT">GRANT</option><option value="REVOKE">REVOKE</option></select>
+                            </div>
+                            <div style="flex: 1 !important; opacity: 0 !important; pointer-events: none !important; margin: 0 !important; padding: 0 !important;"></div>
+<div style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Привилегии (зажмите Ctrl)</label>
+    
+    <select class="form-select bg-white" id="schemaPrivilege" multiple style="height: 100% !important; flex-grow: 1 !important; padding: 6px !important; font-size: 0.8rem !important; font-weight: 700 !important; color: #334155 !important; width: 100% !important; overflow-y: auto !important;">
+        <option value="USAGE" selected style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">USAGE</option>
+        <option value="CREATE" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">CREATE</option>
+        <option value="ALL" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">ALL</option>
+    </select>
+</div>
+
+                            <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; align-items: flex-end !important; margin: 0 !important; padding: 0 !important;">
+                                <button type="submit" class="btn btn-primary" style="width: 130px !important; height: 34px !important; font-size: 0.88rem !important; font-weight: 700 !important; margin: 0 !important; border-radius: 6px !important; box-sizing: border-box !important;">Применить</button>
+                            </div>
+                        </form>
+                    </div>
+
+                   
+                    <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: -5px 0 -8px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important;"></div>
+                    
+                        <!-- УРОВЕНЬ 3: TABLE -->
+                    <h5 style="font-size: 0.95rem !important; font-weight: 700 !important; margin-top: 0 !important; margin-bottom: 4px !important; color: #1e293b !important; font-family: system-ui, sans-serif !important;">Уровень таблицы (TABLE)</h5>
+                        <form onsubmit="submitForm(event, document.getElementById('tableScopeMode').value)" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 16px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; height: auto !important; box-sizing: border-box !important;">
+                        
+                            <!-- 1. РЕЖИМ ПРИМЕНЕНИЯ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Режим</label>
+    <select class="form-select" id="tableScopeMode" onchange="toggleTableInputDisable()" style="height: 34px !important; font-size: 0.88rem !important; width: 140px !important; min-width: 140px !important; max-width: 140px !important; box-sizing: border-box !important; border-radius: 6px !important; background-color: #ffffff !important;">
+        <option value="TABLE" selected>TABLE</option>
+    </select>
+</div>
+                            <!-- 2. ВЫБОР СХЕМЫ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Схема</label>
+    <select class="form-select bg-white" id="tableSchemaTarget" onchange="onTableSchemaChanged()" style="height: 34px !important; font-size: 0.85rem !important; width: 140px !important; max-width: 140px !important; min-width: 140px !important; border-radius: 6px !important;">
+        <option value="public">public</option>
+    </select>
+</div>
+
+                            <!-- 3. ИМЯ ТАБЛИЦЫ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important;">Имя таблицы</label>
+    <input type="text" class="form-control bg-white" id="tableNameTarget" placeholder="Имя или ALL" value="ALL" style="height: 34px !important; font-size: 0.88rem !important; max-width: 100% !important; width: 100% !important; border-radius: 6px !important;">
+</div>
+
+                            <!-- 4. ДЕЙСТВИЕ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Действие</label>
+    <select class="form-select" id="tableAction" style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;">
+        <option value="GRANT">GRANT</option>
+        <option value="REVOKE">REVOKE</option>
+    </select>
+</div>
+                            <div style="flex: 1 !important; margin: 0 !important; padding: 0 !important;"></div>
+                            
+                            <!-- 5. ПРИВИЛЕГИИ ТАБЛИЦ-->
+<div style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Привилегии (зажмите Ctrl)</label>
+    <select class="form-select bg-white" id="tablePrivilege" multiple style="height: 105px !important; padding: 6px !important; font-size: 0.8rem !important; font-weight: 700 !important; color: #334155 !important; width: 100% !important;">
+        <option value="SELECT" selected style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">SELECT</option>
+        <option value="INSERT" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">INSERT</option>
+        <option value="UPDATE" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">UPDATE</option>
+        <option value="DELETE" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">DELETE</option>
+        <option value="TRUNCATE" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">TRUNCATE</option>
+        <option value="ALL" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">ALL</option>
+    </select>
+</div>
+
+                            <!-- 6. КНОПКА ПРИМЕНИТЬ ПРАВА ТАБЛИЦ -->
+                            <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; align-items: flex-end !important; margin: 0 !important; padding: 0 !important;">
+                                <button type="submit" class="btn fw-bold" style="width: 130px !important; height: 34px !important; font-size: 0.88rem !important; margin: 0 !important; border-radius: 6px !important; box-shadow: 0 3px 6px rgba(15, 23, 42, 0.1) !important; box-sizing: border-box !important;">Применить</button>
+                            </div>
+                        </form>
+                    
+                    <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: -5px 0 -8px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important;"></div>
+                    
+                    <!-- УРОВЕНЬ 4: SEQUENCE -->
+                    <div style="width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;">
+                        <h5 style="font-size: 0.95rem !important; font-weight: 700 !important; margin-top: 0 !important; margin-bottom: 4px !important; color: #1e293b !important; font-family: system-ui, sans-serif !important;">Уровень последовательностей (SEQUENCE)</h5>
+                        <form id="sequenceForm" onsubmit="event.preventDefault(); submitForm(event, 'SEQUENCE');" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 20px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; height: auto !important; box-sizing: border-box !important;">
+                            <!-- 1. РЕЖИМ ПРИМЕНЕНИЯ СИКВЕНСОВ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Режим</label>
+  <select class="form-select" id="seqScopeMode" onchange="toggleSeqInputDisable()" style="height: 34px !important; font-size: 0.88rem !important; width: 140px !important; min-width: 140px !important; max-width: 140px !important; box-sizing: border-box !important; border-radius: 6px !important; background-color: #ffffff !important;">
+        <option value="SEQUENCE" selected>SEQUENCE</option>
+    </select>
+</div>
+                            <!-- 2. ВЫБОР СХЕМЫ СИКВЕНСОВ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Схема</label>
+    <select class="form-select bg-white" id="seqSchemaTarget" style="height: 34px !important; font-size: 0.85rem !important; width: 140px !important; max-width: 140px !important; min-width: 140px !important; border-radius: 6px !important;">
+        <option value="public" selected>public</option>
+    </select>
+</div>
+                            <!-- 3. ИМЯ СИКВЕНСА -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important;">Имя сиквенса</label>
+    <input id="seqNameTarget" type="text" class="form-control bg-white" value="ALL" placeholder="Имя или ALL" style="height: 34px !important; font-size: 0.85rem !important; max-width: 100% !important; width: 100% !important; border-radius: 6px !important;">
+</div>
+
+                            <!-- 4. ДЕЙСТВИЕ СИКВЕНСОВ -->
+<div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Действие</label>
+    <select id="seqAction" class="form-select" style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;">
+        <option value="GRANT" selected>GRANT</option>
+        <option value="REVOKE">REVOKE</option>
+    </select>
+</div>
+                            <div style="flex: 1 !important; margin: 0 !important; padding: 0 !important;"></div>
+
+                            <!-- 5. ПРИВИЛЕГИИ СИКВЕНСОВ -->
+<div style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Привилегии (зажмите Ctrl)</label>
+    <select id="seqPrivilege" class="form-select bg-white" multiple style="height: 105px !important; padding: 6px !important; font-size: 0.8rem !important; font-weight: 700 !important; color: #334155 !important; width: 100% !important;">
+        <option value="USAGE" selected style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">USAGE</option>
+        <option value="SELECT" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">SELECT</option>
+        <option value="ALL" style="font-size: 0.8rem !important; font-weight: 700 !important; padding: 3px 6px !important; margin-bottom: 2px !important; border-radius: 4px !important;">ALL</option>
+    </select>
+</div>
+
+                            <!-- 6. КНОПКА ПРИМЕНИТЬ ПРАВА СИКВЕНСОВ -->
+                            <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; align-items: flex-end !important; margin: 0 !important; padding: 0 !important;">
+                                <button type="submit" class="btn fw-bold" style="width: 130px !important; height: 34px !important; font-size: 0.88rem !important; margin: 0 !important; border-radius: 6px !important; box-shadow: 0 3px 6px rgba(15, 23, 42, 0.1) !important; box-sizing: border-box !important;">Применить</button>
+                            </div>
+                            </div>
+                        </form>
+
+
+                </div> <!-- 1. ЗАКРЫЛИ ОБЩУЮ БЕЛАЮ ПЛИТУ КАРТОЧКИ МОНОЛИТА -->
+            </div> <!-- 2. ЗАКРЫЛИ ВНУТРЕННИЙ Flex-КОНТЕЙНЕР РЯДОВ -->
+        </div> <!-- 3. ЗАКРЫЛИ КОНТУР ВТОРОЙ ВКЛАДКИ УПРАВЛЕНИЯ ПРАВАМИ -->
+        
+        
+
+<!-- ========================================================================= -->
+<!-- ВКЛАДКА 3: РЕЕСТР СЕРВЕРОВ И ПОДКЛЮЧЕННЫХ КЛАСТЕРОВ СУБД                  -->
+<!-- ========================================================================= -->
+<div class="tab-pane fade" id="servers" role="tabpanel" style="box-sizing: border-box !important;">
+    <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border-color: rgba(0, 0, 0, 0.06) !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; gap: 30px !important;">
+
+        <!-- ЯРУС 1: РЕГИСТРАЦИЯ БАЗЫ ДАННЫХ -->
+        <div style="display: flex !important; flex-direction: column !important; gap: 15px !important; box-sizing: border-box !important;">
+            <div style="display: flex !important; align-items: center !important; gap: 10px !important; width: 100% !important; margin-bottom: 5px !important;">
+                <svg xmlns="http://w3.org" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-2.239 10-5V7c0-2.761-4.477-5-10-5S2 4.239 2 7v10c0 2.761 4.477 5 10 5z"></path><path d="M22 7c0 2.761-4.477 5-10 5S2 9.761 2 7"></path><path d="M22 12c0 2.761-4.477 5-10 5S2 14.761 2 12"></path></svg>
+                <h5 style="margin: 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important; letter-spacing: -0.02rem !important;">Регистрация базы данных</h5>
+            </div>
+            
+            <form id="registerServerForm" onsubmit="submitRegisterServerForm(event)" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: space-between !important; gap: 20px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+                
+                <!-- 1. ID Сервера -->
+                <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">ID Сервера</label>
+                    <input type="text" class="form-control bg-white" id="regId" placeholder="dwh_prod" required style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;">
+                </div>
+
+                <!-- 2. Хост / IP -->
+                <div style="flex: 1.3 !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Хост / IP-адрес</label>
+                    <input type="text" class="form-control bg-white" id="regHost" placeholder="10.8.2.15" required style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;"">
+                </div>
+
+                <!-- 3. Порт -->
+                <div style="width: 90px !important; min-width: 90px !important; max-width: 90px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Порт</label>
+                    <input type="number" class="form-control bg-white" id="regPort" value="5432" required style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;"">
+                </div>
+                <!-- 4. Пользователь -->
+                <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Пользователь</label>
+                    <input type="text" class="form-control bg-white" id="regUser" value="postgres" required style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;">
+                </div>
+
+                <!-- 5. Служебная БД -->
+                <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Служебная БД</label>
+                    <input type="text" class="form-control bg-white" id="regDbname" value="postgres" autocomplete="username" required style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;">
+                </div>
+
+                <!-- 6. Пароль -->
+                <div style="flex: 1 !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; margin: 0 !important; padding: 0 !important; white-space: nowrap !important;">Пароль</label>
+                    <input type="password" class="form-control bg-white" id="regPassword" placeholder="••••••••" autocomplete="new-password" required style="height: 34px !important; font-size: 0.88rem !important; width: 100% !important; border-radius: 6px !important; background-color: #ffffff !important;">
+                </div>
+
+                <!-- 7. ПАНЕЛЬ ФИРМЕННЫХ КНОПОК ПОДВАЛА СТРОКИ -->
+                <div style="display: flex !important; gap: 10px !important; align-items: flex-end !important; box-sizing: border-box !important; padding: 0 !important; margin: 0 !important;">
+                    <button type="button" class="btn" style="width: 130px !important; height: 34px !important; font-size: 0.85rem !important; font-weight: 700 !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; color: #475569 !important; background-color: #ffffff !important; cursor: pointer !important; padding: 0 4px !important; white-space: nowrap !important;" onclick="testConnectionBeforeRegister()">Проверить связь</button>
+                    <button type="submit" class="btn" style="width: 130px !important; height: 34px !important; font-size: 0.88rem !important; font-weight: 700 !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; color: #475569 !important; background-color: #ffffff !important; cursor: pointer !important;">Добавить</button>
+                </div>
+
+            </form>
+        </div>
+
+        <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: -5px 0 -8px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important;"></div>
+        
+        <!-- ЯРУС 2: МОНИТОРИНГ И БЫСТРЫЙ ПОИСК СЕРВЕРОВ -->
+        <div style="display: flex !important; flex-direction: column !important; gap: 15px !important; box-sizing: border-box !important;">
+            <div style="display: flex !important; justify-content: space-between !important; align-items: center !important; flex-wrap: nowrap !important; width: 100% !important; gap: 20px !important;">
+                <div style="display: flex !important; align-items: center !important; gap: 10px !important; margin: 0 !important;">
+                    <svg xmlns="http://w3.org" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    <h5 style="margin: 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important; letter-spacing: -0.01rem !important;">Зарегистрированные инстансы</h5>
+                </div>
+                <!-- Поле быстрого поиска с значком лупы -->
+                <div style="position: relative !important; width: 280px !important; min-width: 280px !important; max-width: 280px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; margin: 0 !important;">
+                    <svg xmlns="http://w3.org" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute !important; top: 10px !important; left: 12px !important;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" class="form-control bg-white" id="searchServerInput" oninput="filterServersTable()" placeholder="Быстрый поиск серверов..." style="padding-left: 34px !important; height: 34px !important; font-size: 0.88rem !important; border-radius: 6px !important; width: 100% !important;">
+                </div>
+            </div>
+
+            <!-- ТАБЛИЦА РЕЕСТРА ИНСТАНСОВ ВНУТРИ ПЛИТЫ -->
+            <div class="table-responsive" style="border: 1px solid #e2e8f0 !important; border-radius: 8px !important; overflow: hidden !important; background-color: #ffffff !important; box-sizing: border-box !important; margin: 0 !important;">
+                <table class="table table-sm align-middle" id="serversTable" style="margin: 0 !important; width: 100% !important; border-collapse: collapse !important; font-size: 0.9rem !important;">
+                    <thead style="background-color: #f8fafc !important; border-bottom: 1px solid #e2e8f0 !important;">
+                        <tr>
+                            <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; border: none !important; width: 15% !important;">ID Сервера</th>
+                            <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; border: none !important; width: 25% !important;">Host / IP-адрес</th>
+                            <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; border: none !important; width: 10% !important;">Порт</th>
+                            <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; border: none !important; width: 15% !important;">Пользователь</th>
+                            <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; border: none !important; width: 20% !important;">Служебная БД</th>
+                            <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; border: none !important; width: 15% !important; text-align: left !important;">Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody id="serversTableBody" style="background-color: #ffffff !important;">
+                        <!-- Здесь JavaScript автоматически генерирует строки серверов СУБД -->
+                    </tbody>
+                </table>
+            </div>
+
+                <!-- БЛОК ПАГИНАЦИИ ТАБЛИЦЫ -->
+                <div id="serversPagination" class="d-flex justify-content-center align-items-center gap-2 mt-3" style="display: flex !important; justify-content: center !important; align-items: center !important; gap: 8px !important; width: 100% !important; box-sizing: border-box !important;">
+                    <button class="btn active" style="background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #0f172a !important; font-weight: 700 !important;" disabled>1</button>
+                    <button class="btn" onclick="window.currentServersPage = 2; renderServersTable(window.globalServersCache || globalServersCache); return false;">2</button>
+                    <button class="btn" onclick="window.currentServersPage = 2; renderServersTable(window.globalServersCache || globalServersCache); return false;">Вперед »</button>
+                </div>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- ВКЛАДКА 4: АДМИНИСТРАТОРЫ ПАНЕЛИ — ЧАСТЬ 1 ИЗ 2                           -->
+<!-- ========================================================================= -->
+<div class="tab-pane fade" id="panelAdminTab" role="tabpanel" style="box-sizing: border-box !important;">
+    <div style="display: flex !important; flex-direction: column !important; gap: 12px !important; width: 100% !important; box-sizing: border-box !important; padding: 0 !important; margin: 0 !important;">
+        
+        <!-- ГЛАВНАЯ ПЛИТА КАРТОЧКИ АДМИНИСТРАТОРОВ -->
+        <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; box-sizing: border-box !important; display: block !important; margin-top: 5px !important;">
+            
+            <!-- Шапка верхнего яруса -->
+            <div style="margin: 0 0 15px 0 !important;">
+                <h5 style="margin: 0 0 4px 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important;">Регистрация администратора панели</h5>
+                <small class="text-secondary" style="font-size: 0.82rem !important;">Создание локальной учетной записи для управления правами и аудита инстансов PostgreSQL.</small>
+            </div>
+
+    <!-- ========================================================================= -->
+    <!-- [ЯРУС №1]: ОРИГИНАЛЬНАЯ ЗАВОДСКАЯ ФОРМА РЕГИСТРАЦИИ                       -->
+    <!-- ========================================================================= -->
+    <form id="registerPanelUserForm" onsubmit="window.submitRegisterPanelUserForm(event); return false;" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 12px !important; align-items: flex-end !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+        
+        <!-- 1. УЧЁТНАЯ ЗАПИСЬ -->
+        <div style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+            <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Учётная запись</label>
+            <input type="text" class="form-control bg-white" id="panelUserLogin" placeholder="username" autocomplete="username" required style="height: 34px !important; font-size: 0.85rem !important;">
+        </div>
+
+        <!-- 2. ПАРОЛЬ -->
+        <div style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+            <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Пароль</label>
+            <input type="password" class="form-control bg-white" id="panelUserPassword" placeholder="••••••••••••" autocomplete="new-password" style="height: 34px !important; font-size: 0.85rem !important;">
+        </div>
+
+        <!-- 3. НАЗНАЧИТЬ РОЛЬ -->
+ <div style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+ <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Назначить роль</label>
+ <select class="form-select bg-white" id="panelUserRole" onchange="window.toggleAdminFieldsValidation()">
+ <option value="admin">Администратор</option>
+ <option value="Security_Manager" selected>Менеджер</option>
+ <option value="auditor">Аудитор</option>
+ </select>
+ </div>
+        <!-- 4. РАЗРЕШИТЬ СЕРВЕРЫ -->
+        <div style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+            <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Серверы СУБД</label>
+            <input type="text" class="form-control bg-white" id="panelUserAllowedServers" placeholder="dwh_prod, mdm_prod" style="height: 34px !important; font-size: 0.85rem !important;">
+        </div>
+
+        <!-- 5. РАЗРЕШЕННЫЕ РОЛИ В МОДАЛКЕ -->
+        <div style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+            <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Роли</label>
+            <input type="text" class="form-control bg-white" id="panelUserAllowedRoles" placeholder="dev_group, qa_group" style="height: 34px !important; font-size: 0.85rem !important;">
+        </div>
+
+        <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; margin-left: auto !important;">
+            <button type="submit" id="btnSubmitRegisterAdmin" class="btn btn-primary fw-bold" style="width: 100% !important; height: 34px !important; font-size: 0.82rem !important; border-radius: 6px !important;">Создать</button>
+        </div>
+    </form>
+
+    <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: 20px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important;"></div>
+
+    <!-- ========================================================================= -->
+    <!-- [ЯРУС №2]: КОНТУР ИБ                                                      -->
+    <!-- ========================================================================= -->
+    <div id="directIbLimitsBlock" style="display: block !important; width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;">
+        
+        <div style="margin: 0 0 12px 0 !important; padding-bottom: 4px !important;">
+            <h5 style="margin: 0 0 2px 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important; font-family: system-ui, sans-serif !important; letter-spacing: -0.01rem !important;">Калибровка ИБ-матрицы прав и лимитов</h5>
+            <small class="text-secondary" style="font-size: 0.78rem !important; font-family: system-ui, sans-serif !important;">Введите логин существующего пользователя, укажите новые пулы допусков и нажмите кнопку обновления. База учетных записей не затрагивается.</small>
+        </div>
+
+        <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 16px !important; align-items: flex-end !important; width: 100% !important; box-sizing: border-box !important;">
+            
+            <!-- 1. НОВЫЙ ИБ-ЛОГИН -->
+            <div style="width: 240px !important; min-width: 240px !important; max-width: 240px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Имя пользователя</label>
+                <input type="text" class="form-control bg-white" id="ibTargetUserLogin" placeholder="username" style="height: 34px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important;">
+            </div>
+
+            <!-- 2. НОВЫЕ ИБ-СЕРВЕРЫ -->
+            <div style="width: 240px !important; min-width: 240px !important; max-width: 240px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Серверы СУБД</label>
+                <input type="text" class="form-control bg-white" id="ibTargetAllowedServers" placeholder="dwh_prod, mdm_prod" style="height: 34px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important;">
+            </div>
+
+            <!-- 3. НОВЫЕ ИБ-РОЛИ -->
+            <div style="width: 240px !important; min-width: 240px !important; max-width: 240px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                <label style="font-size: 0.82rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">Роли</label>
+                <input type="text" class="form-control bg-white" id="ibTargetAllowedRoles" placeholder="dev_group, qa_group" style="height: 34px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important;">
+            </div>
+
+            <div style="flex: 1 !important;"></div>
+
+            <div style="width: 140px !important; min-width: 140px !important; max-width: 140px !important; box-sizing: border-box !important;">
+                <a href="javascript:void(0);" role="button" id="btnUpdateIbLimitsDirect" class="btn btn-warning fw-bold" onclick="window.submitDirectIbLimitsUpdate(); return false;" style="height: 34px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important;">
+                    Обновить
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: 20px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important;"></div>
+
+<div class="d-flex justify-content-between align-items-center mb-3" style="display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; margin: 20px 0 16px 0 !important; padding: 0 4px !important; box-sizing: border-box !important;">
+
+    <!-- ЗАГОЛОВОК ТАБЛИЦЫ -->
+    <h5 style="margin: 0 !important; padding: 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important; letter-spacing: -0.01rem !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important; line-height: 1 !important;">
+        Действующие администраторы панели
+    </h5>
+
+    <!-- ИНПУТ ДИНАМИЧЕСКОГО ПОИСКА СО ВСТРОЕННОЙ ЛУПОЙ -->
+    <div style="width: 300px !important; position: relative !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important; flex-shrink: 0 !important;">
+        <input type="text" id="tableSearchInput" oninput="window.filterPanelUsersTable();" class="form-control" placeholder="Поиск по логину, роли или серверу..." style="height: 36px !important; font-size: 0.85rem !important; border-radius: 6px !important; padding-left: 10px !important; padding-right: 34px !important; width: 100% !important; background-color: #ffffff !important; margin: 0 !important;">
+
+        <!-- ВЕКТОРНАЯ ИКОНКА ЛУПЫ -->
+        <div style="position: absolute !important; top: 0 !important; right: 0 !important; height: 100% !important; width: 34px !important; display: flex !important; align-items: center !important; justify-content: center !important; pointer-events: none !important; margin: 0 !important; padding: 0 !important;">
+            <svg xmlns="http://w3.org" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block !important; margin: 0 !important;">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        </div>
+    </div>
+
+</div>
+
+        <!-- АДАПТИВНЫЙ КОНТЕЙНЕР ТАБЛИЦЫ -->
+        <div class="table-responsive" style="width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;"> 
+            <table class="table table-sm align-middle" id="panelUsersTable" style="font-size: 0.88rem !important; margin-bottom: 0 !important; width: 100% !important; border-collapse: collapse !important;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #e2e8f0 !important;">
+                        <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; width: 80px !important;">ID</th>
+                        <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; width: 250px !important;">Учётная запись</th>
+                        <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; width: 250px !important;">Статус сессии</th>
+                        <th style="padding: 12px 14px !important; font-weight: 700 !important; color: #475569 !important; text-align: left !important;">Управление доступом</th>
+                    </tr>
+                </thead>
+                <tbody id="panelUsersTableBody">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted" style="padding: 20px !important;">Загрузка списка администраторов...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="panelUsersPagination" class="mt-3" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; justify-content: center !important; gap: 6px !important; width: 100% !important; margin-top: 16px !important; box-sizing: border-box !important;"></div>
+
+        </div>
+    </div>
+</div> <!-- ЗАКРЫЛИ КОНТЕЙНЕР ВКЛАДКИ ID="PANELADMINTAB" -->
+
+
+<!-- ========================================================================= -->
+<!-- ВКЛАДКА 5: АУДИТ
+<!-- ========================================================================= -->
+<div class="tab-pane fade show" id="auditTab" aria-label="Гибридный супер-аудит" role="tabpanel" style="box-sizing: border-box !important; width: 100% !important;">
+    <div style="display: flex !important; flex-direction: column !important; gap: 12px !important; width: 100% !important; box-sizing: border-box !important; padding: 0 !important; margin: 0 !important;">
+
+        <!-- ГЛАВНАЯ ПЛИТА КАРТОЧКИ АУДИТА -->
+        <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; border-color: #cbd5e1 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; gap: 30px !important; margin-top: 5px !important;">
+
+            <!-- ЯРУС 1: ПАНЕЛЬ ФИЛЬТРАЦИИ И УПРАВЛЕНИЯ ЛОГАМИ -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 15px !important; box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important;">
+                <div style="margin: 0 !important;">
+                    <h5 style="margin: 0 0 4px 0 !important; font-weight: 700 !important; color: #1e293b !important; font-size: 1.1rem !important; letter-spacing: -0.01rem !important;">Журнал аудита</h5>
+                    <small class="text-secondary" style="font-size: 0.82rem !important;">Мониторинг действий пользователей панели, вызовов API и системных логов СУБД PostgreSQL.</small>
+                </div>
+                
+                <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: space-between !important; gap: 12px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+                    
+                    <!-- РАБОЧАЯ ГРУППА ИНПУТОВ -->
+                    <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; gap: 12px !important; flex: 1 !important; box-sizing: border-box !important;">
+                        
+                        <!-- 1. Фильтр: Пользователь -->
+                        <div style="width: 170px !important; min-width: 170px !important; color: #475569 !important; max-width: 170px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                            <label class="form-label small fw-bold text-secondary" style="margin: 0 !important; white-space: nowrap !important; display: inline-flex !important; align-items: center !important; gap: 6px !important;">
+                                <svg xmlns="http://w3.org" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block !important; vertical-align: middle !important; flex-shrink: 0 !important;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                <span>Администратор</span>
+                            </label>
+                            <input type="text" class="form-control bg-white" id="auditFilterUser" placeholder="admin" style="height: 38px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important; box-sizing: border-box !important;">
+                        </div>
+
+                        <!-- 2. Фильтр: ID Сервера -->
+                        <div style="width: 170px !important; min-width: 170px !important; color: #475569 !important; max-width: 170px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                            <label class="form-label small fw-bold text-secondary" style="margin: 0 !important; white-space: nowrap !important; display: inline-flex !important; align-items: center !important; gap: 6px !important;">
+                                <svg xmlns="http://w3.org" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block !important; vertical-align: middle !important; flex-shrink: 0 !important;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                                <span>ID Сервера</span>
+                            </label>
+                            <input type="text" class="form-control bg-white" id="auditFilterServer" placeholder="PANEL_MANAGER" style="height: 38px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important; box-sizing: border-box !important;">
+                        </div>
+                        <!-- 3. Фильтр: Команда -->
+                        <div style="width: 170px !important; min-width: 170px !important; color: #475569 !important; max-width: 170px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                             <label class="form-label small fw-bold text-secondary" style="margin: 0 !important; white-space: nowrap !important; display: inline-flex !important; align-items: center !important; gap: 6px !important;">
+                                  <svg xmlns="http://w3.org" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block !important; vertical-align: middle !important; flex-shrink: 0 !important;"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                                   <span>Команда</span>
+                            </label>
+                            <input type="text" class="form-control bg-white" id="auditFilterAction" placeholder="GRANT" style="height: 38px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important; box-sizing: border-box !important;">
+                      </div>
+                        <!-- 4. Фильтр: Логи за дату -->
+                        <div style="width: 170px !important; min-width: 170px !important; color: #475569 !important; max-width: 170px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                            <label class="form-label small fw-bold text-secondary" style="margin: 0 !important; white-space: nowrap !important; display: inline-flex !important; align-items: center !important; gap: 6px !important;">
+                                <svg xmlns="http://w3.org" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block !important; vertical-align: middle !important; flex-shrink: 0 !important;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                <span>Логи за дату</span>
+                            </label>
+                            <input type="date" class="form-control bg-white" id="auditFilterDateFrom" style="height: 38px !important; font-size: 0.85rem !important; border-radius: 6px !important; width: 100% !important; box-sizing: border-box !important;">
+                        </div>
+                    </div>
+                    
+                    <!-- КНОПКИ УПРАВЛЕНИЯ ФИЛЬТРАМИ -->
+                    <div style="display: flex !important; align-items: flex-end !important; gap: 10px !important; flex-shrink: 0 !important; box-sizing: border-box !important;">
+                        <button type="button" class="btn fw-bold" onclick="currentAuditPage = 1; loadAuditLogs();" style="height: 38px !important; width: 90px !important; font-size: 0.85rem !important; border-radius: 6px !important; margin: 0 !important; box-sizing: border-box !important;">Найти</button>
+                        <button type="button" class="btn btn-outline-secondary fw-bold" onclick="resetAuditFilters()" style="height: 38px !important; width: 90px !important; font-size: 0.85rem !important; border-radius: 6px !important; margin: 0 !important; box-sizing: border-box !important; border: 1px solid #cbd5e1 !important;">Сброс</button>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: 12px 0 16px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important; display: block !important;"></div>
+
+            <!-- ЯРУС 2: ТАБЛИЦА ЛОГОВ АУДИТА И БЛОК СТРОК -->
+                <div class="table-responsive" style="width: 100% !important; overflow-x: auto !important; display: block !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;">
+                    
+                    <table class="table table-sm" id="auditTable" style="font-size: 0.85rem !important; margin-bottom: 0 !important; width: 100% !important; border-collapse: collapse !important; table-layout: auto !important;">
+        <thead>
+            <tr style="border-bottom: 2px solid #e2e8f0 !important; white-space: nowrap !important; background-color: #f8fafc !important;">
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 60px !important;">ID</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 180px !important; white-space: nowrap !important;">Время</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 120px !important;">Администратор</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 130px !important;">Пользователь СУБД</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 110px !important;">ID Сервера</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 100px !important;">Команда</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 120px !important;">Объект СУБД</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 140px !important;">Права</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; width: 90px !important;">Статус</th>
+                <th style="padding: 12px 10px !important; font-weight: 700; color: #475569 !important; text-align: left !important; min-width: 250px !important; max-width: 400px !important;">Описание ошибки СУБД</th>
+            </tr>
+        </thead>
+
+                        <tbody id="auditTableBody">
+                            <tr>
+                                <td colspan="9" class="text-center text-muted" style="padding: 20px !important;">Загрузка логов...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- БЛОК ПАГИНАЦИИ СТРОК-->
+                <div id="auditPagination" class="d-flex justify-content-center align-items-center gap-2 mt-3" style="display: flex !important; justify-content: center !important; align-items: center !important; gap: 8px !important; width: 100% !important; box-sizing: border-box !important;"></div>
+
+            </div>
+
+        </div> <!-- ЗАКРЫЛИ ПЛИТУ КАРТОЧКИ ПЯТОЙ СТРАНИЦЫ -->
+    </div> <!-- ЗАКРЫЛИ ВНУТРЕННИЙ FLEX-КОНТЕЙНЕР ВКЛАДКИ -->
+
+<!-- ========================================================================= -->
+<!-- ВКЛАДКА 6 НАСТРОЙКИ ПОЧТОВОГО СЕРВЕРА И ТЕСТИРОВАНИЯ ШЛЮЗА SMTP           -->
+<!-- ========================================================================= -->
+<div class="tab-pane fade" id="smtpTab" aria-label="Настройка почты" role="tabpanel" style="box-sizing: border-box !important; width: 100% !important; margin: 0 !important; padding: 0 !important;">
+ 
+    <!-- КАРТОЧКА БЛОКА 1: ПАРАМЕТРЫ ПОДКЛЮЧЕНИЯ SMTP -->
+    <div style="background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; padding: 20px !important; box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important; width: 100% !important; box-sizing: border-box !important; margin-bottom: 16px !important;">
+        <h5 style="font-size: 1.1rem !important; font-weight: 700 !important; margin-top: 0 !important; margin-bottom: 12px !important; color: #1e293b !important; font-family: system-ui, sans-serif !important;">Конфигурация почтового сервера (SMTP)</h5>
+ 
+        <form id="smtpConfigForm" onsubmit="submitSmtpConfigForm(event)" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 16px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+            <div style="width: 200px !important; min-width: 200px !important; max-width: 200px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; box-sizing: border-box !important;">
+                <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important;">SMTP Сервер</label>
+                <input type="text" class="form-control bg-white" id="smtpHost" placeholder="smtp.company.domen" required style="height: 34px !important; font-size: 0.85rem !important; width: 100% !important; border-radius: 6px !important;">
+            </div>
+            <div style="width: 100px !important; min-width: 100px !important; max-width: 100px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; box-sizing: border-box !important;">
+                <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important;">Порт</label>
+                <input type="number" class="form-control bg-white" id="smtpPort" placeholder="465" required style="height: 34px !important; font-size: 0.85rem !important; width: 100% !important; border-radius: 6px !important;">
+            </div>
+            <div style="width: 220px !important; min-width: 220px !important; max-width: 220px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; box-sizing: border-box !important;">
+                <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important;">Пользователь (Email)</label>
+                <input type="email" autocomplete="username" class="form-control bg-white" id="smtpUser" placeholder="admin@company.domen" required style="height: 34px !important; font-size: 0.85rem !important; width: 100% !important; border-radius: 6px !important;">
+            </div>
+            <div style="width: 200px !important; min-width: 200px !important; max-width: 200px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; box-sizing: border-box !important;">
+                <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important;">Пароль приложения</label>
+                <input type="password" autocomplete="current-password" class="form-control bg-white" id="smtpPassword" placeholder="•••••••••••••••••" required style="height: 34px !important; font-size: 0.85rem !important; width: 100% !important; border-radius: 6px !important;">
+            </div>
+            <div style="width: 120px !important; min-width: 120px !important; max-width: 120px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; box-sizing: border-box !important;">
+                <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important;">Шифрование</label>
+                <select class="form-select bg-white" id="smtpUseTls" style="height: 34px !important; font-size: 0.85rem !important; border-radius: 6px !important;">
+                    <option value="true" selected>SSL/TLS</option>
+                    <option value="false">Без TLS</option>
+                </select>
+            </div>
+            <div style="flex: 1 !important; margin: 0 !important; padding: 0 !important;"></div>
+            <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; align-items: flex-end !important; box-sizing: border-box !important;">
+                <button type="submit" class="btn btn-primary fw-bold" style="width: 130px !important; height: 34px !important; font-size: 0.85rem !important; font-weight: 700 !important; border-radius: 6px !important; margin: 0 !important; box-sizing: border-box !important;">Сохранить</button>
+            </div>
+        </form>
+    </div>
+
+    <div style="border-top: 1.5px dashed #94a3b8 !important; opacity: 1 !important; margin: 12px 0 16px 0 !important; height: 0 !important; padding: 0 !important; width: 100% !important; line-height: 0 !important; display: block !important;"></div>
+
+
+    <!-- КАРТОЧКА БЛОКА 2: ТЕСТИРОВАНИЕ ОТПРАВКИ ПИСЬМА -->
+    <div style="background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; padding: 20px !important; box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important; width: 100% !important; box-sizing: border-box !important;">
+        <h5 style="font-size: 1.1rem !important; font-weight: 700 !important; margin-top: 0 !important; margin-bottom: 12px !important; color: #1e293b !important; font-family: system-ui, sans-serif !important;">Проверка работоспособности шлюза оповещений</h5>
+        <form id="smtpTestForm" onsubmit="submitSmtpTestForm(event)" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 16px !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important;">
+            <div style="width: 240px !important; min-width: 240px !important; max-width: 240px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; box-sizing: border-box !important;">
+                <label style="font-size: 0.8rem !important; font-weight: 700 !important; color: #475569 !important; font-family: system-ui, sans-serif !important; white-space: nowrap !important;">Email получателя тестового письма</label>
+                <input type="email" class="form-control bg-white" id="smtpTestRecipient" placeholder="your-email@company.domen" required style="height: 34px !important; font-size: 0.85rem !important; width: 100% !important; border-radius: 6px !important;">
+            </div>
+            <div style="flex: 1 !important; margin: 0 !important; padding: 0 !important;"></div>
+            <div style="width: 130px !important; min-width: 130px !important; max-width: 130px !important; display: flex !important; align-items: flex-end !important; box-sizing: border-box !important;">
+                <button type="submit" id="btnSmtpTestSubmit" class="btn btn-success fw-bold" style="width: 160px !important; height: 34px !important; font-size: 0.85rem !important; font-weight: 700 !important; border-radius: 6px !important; margin: 0 !important; box-sizing: border-box !important;">Отправить</button>
+            </div>
+        </form>
+    </div>
+</div> <!-- ЗАКРЫЛИ ТЕГ ШЕСТОЙ ВКЛАДКИ ID="SMTPTAB" -->
+
+
+<!-- ========================================================================= -->
+<!-- ВКЛАДКА 7 КОНТУР ДЛЯ ИБ-ОФИЦЕРА                                           -->
+<!-- ========================================================================= -->
+<div class="tab-pane fade" id="panelSecurityRightsTab" role="tabpanel" style="box-sizing: border-box !important;">
+    <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;">
+        
+        <!-- ШАПКА ВКЛАДКИ -->
+        <div style="border-bottom: 2px solid #d97706 !important; padding-bottom: 10px !important; margin-bottom: 20px !important;">
+            <h4 class="fw-bold text-dark" style="font-weight: 800 !important; margin: 0 !important; font-size: 1.1rem !important; font-family: system-ui, sans-serif !important; color: #b45309 !important;">🛡️ Делегирование системных групп и ролей кластера</h4>
+            <p style="font-size: 0.85rem !important; color: #64748b !important; margin: 4px 0 0 0 !important;">Быстрая привязка разрешённых групповых ролей к пользователям на выделенных вам серверах СУБД.</p>
+        </div>
+        
+        <!-- ГОРИЗОНТАЛЬНЫЙ РЯД КАСКАДА СЕЛЕКТОРОВ -->
+        <div style="display: flex !important; flex-direction: row !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 18px !important; width: 100% !important; background-color: #f8fafc !important; padding: 16px !important; border-radius: 8px !important; border: 1px solid #e2e8f0 !important; box-sizing: border-box !important; margin-bottom: 24px !important;">
+            
+            <!-- 1. ВЫБОР СЕРВЕРА -->
+            <div style="width: 320px !important; min-width: 320px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                <label class="fw-bold text-dark" style="font-size: 0.85rem !important; color: #475569 !important;">1. Выберите сервер</label>
+                <select class="form-select bg-white" id="secTargetServer" onchange="window.securityOnServerChanged()" style="height: 42px !important; font-size: 0.95rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; width: 100% !important; box-shadow: none !important;">
+                    <option value="" disabled selected>Выберите целевой сервер...</option>
+                </select>
+            </div>
+
+            <!-- 2. ВЫБОР БАЗЫ ДАННЫХ -->
+            <div style="width: 320px !important; min-width: 320px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                <label class="fw-bold text-dark" style="font-size: 0.85rem !important; color: #475569 !important;">2. Выберите базу данных</label>
+                <select class="form-select bg-white" id="secDatabase" disabled onchange="window.securityOnDatabaseChanged()" style="height: 42px !important; font-size: 0.95rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; width: 100% !important; box-shadow: none !important;">
+                    <option value="" disabled selected>Сначала выберите сервер...</option>
+                </select>
+            </div>
+
+            <!-- 3. ВЫБОР ПОЛЬЗОВАТЕЛЯ -->
+            <div style="width: 320px !important; min-width: 320px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                <label class="fw-bold text-dark" style="font-size: 0.85rem !important; color: #475569 !important;">3. Выберите пользователя</label>
+                <select class="form-select bg-white" id="secRole" disabled onchange="window.securityOnUserSelected()" style="height: 42px !important; font-size: 0.95rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; width: 100% !important; box-shadow: none !important;">
+                    <option value="" disabled selected>Сначала выберите базу...</option>
+                </select>
+            </div>
+        </div>
+
+    <!-- ========================================================================= -->
+    <!-- [ЯРУС №1]: УПРАВЛЕНИЕ ПРАВАМИ                                             -->
+    <!-- ========================================================================= -->
+        <div id="secInlinePanel" style="display: none !important; flex-direction: column !important; gap: 16px !important; width: 100% !important; background-color: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 10px !important; padding: 24px !important; box-sizing: border-box !important;">
+            
+            <div style="background-color: #eff6ff !important; border: 1px solid #bfdbfe !important; border-radius: 8px !important; padding: 14px !important; font-size: 0.88rem !important; color: #1e3a8a !important; display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                <div><strong>📌 Выбранный контур СУБД:</strong></div>
+                <div id="secInlineContextInfo" style="font-family: monospace !important; font-weight: bold !important;">Сервер: --- | База: --- | Цель: ---</div>
+            </div>
+
+            <!-- ЗОНА НАКАТА РОЛИ И ВЫБОРА ДЕЙСТВИЯ -->
+            <div style="display: flex !important; flex-direction: row !important; align-items: flex-end !important; gap: 16px !important; width: 100% !important; margin-top: 8px !important;">
+                
+                <!-- Доступные ИБ-группы -->
+                <div style="flex: 1 !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label class="fw-bold text-dark" style="font-size: 0.85rem !important;">Доступные ИБ-группы для делегирования:</label>
+                    <select class="form-select fw-bold" id="secInlineRoleSelect" style="height: 38px !important; font-size: 0.9rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; color: #b45309 !important; background-color: #fef3c7 !important; box-shadow: none !important;">
+                        <!-- Опции ролей подгружаются динамически -->
+                    </select>
+                </div>
+
+                <!-- Выбор действия: Назначить или Отозвать -->
+                <div style="width: 160px !important; display: flex !important; flex-direction: column !important; gap: 4px !important;">
+                    <label class="fw-bold text-dark" style="font-size: 0.85rem !important;">Действие ИБ:</label>
+                    <select class="form-select" id="secRoleActionSelect" style="height: 38px !important; font-size: 0.9rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; background-color: #ffffff !important; box-shadow: none !important;">
+                        <option value="GRANT" selected>➕ Назначить</option>
+                        <option value="REVOKE">❌ Отозвать</option>
+                    </select>
+                </div>
+
+                <!-- Финальная кнопка выполнения -->
+                <button type="button" id="secInlineSubmitBtn" onclick="event.preventDefault(); window.secSubmitCustomRoleAssign();" class="btn fw-bold" style="width: 140px !important; height: 38px !important; font-size: 0.85rem !important; background-color: #f59e0b !important; color: #ffffff !important; border-radius: 6px !important; cursor: pointer !important;">Выполнить</button>
+                
+            </div>
+
+        </div>
+
+    </div>
+</div> <!-- Контейнер вкладки закрылся здесь -->
+
+
+    <!-- ========================================================================= -->
+    <!-- [ЯРУС №2]: СОЗДАНИЕ ПОЛЬЗОВАТЕЛЕЙ                                         -->
+    <!-- ========================================================================= -->
+<div class="tab-pane fade" id="securityCreateUserTab" role="tabpanel" style="box-sizing: border-box !important;">
+    <div style="display: flex !important; flex-direction: column !important; gap: 12px !important; width: 100% !important; box-sizing: border-box !important; padding: 0 !important; margin: 0 !important;">
+        <div class="card p-4 mb-4 border rounded w-100" style="background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; margin-top: 5px !important;">
+            
+            <!-- Шапка контура создания -->
+            <div style="margin: 0 0 15px 0 !important;">
+                <h5 style="margin: 0 0 4px 0 !important; font-weight: 800 !important; color: #b45309 !important; font-size: 1.1rem !important; font-family: system-ui, sans-serif !important;">
+                    👤 Изолированное создание пользователя PostgreSQL
+                </h5>
+                <small class="text-secondary" style="font-size: 0.82rem !important; color: #64748b !important;">
+                    Генерация роли с флагом LOGIN. Пароль на 16 символов генерируется СУБД автоматически, доступ уходит строго на Email сотрудника.
+                </small>
+            </div>
+            
+            <hr style="height: 1px !important; width: 100% !important; background-color: #cbd5e1 !important; border: none !important; border-top: 2px solid #d97706 !important; margin: 0 0 24px 0 !important; opacity: 1 !important;">
+
+            <!-- Создание -->
+            <form id="securityOnlyCreateUserForm" onsubmit="window.securitySubmitOnlyCreateUser(event); return false;" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 18px !important; align-items: flex-end !important; width: 100% !important; margin: 0 !important; padding: 0 !important; border: none !important; box-sizing: border-box !important;">
+                
+                <!-- 1. ВЫБОР СЕРВЕРА -->
+                <div style="width: 320px !important; min-width: 320px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                    <label style="font-size: 0.85rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">1. Введите или выберите сервер</label>
+                    <select class="form-select bg-white" id="secOnlyCreateTargetServer" required style="height: 42px !important; font-size: 0.95rem !important; padding-top: 4px !important; padding-bottom: 4px !important; padding-left: 12px !important; line-height: 1.4 !important; border: 1px solid #cbd5e1 !important; box-sizing: border-box !important; border-radius: 6px !important; box-shadow: none !important;">
+                        <option value="" disabled selected>Выберите целевой сервер...</option>
+                    </select>
+                </div>
+
+                <!-- 2. ИМЯ НОВОГО ПОЛЬЗОВАТЕЛЯ -->
+                <div style="width: 300px !important; min-width: 300px !important; display: flex !important; flex-direction: column !important; gap: 6px !important;">
+                    <label style="font-size: 0.85rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">2. Имя пользователя</label>
+                    <input type="text" class="form-control bg-white" id="secOnlyCreateUsername" placeholder="ivan_ivanov" required pattern="^[a-zA-Z0-9_]+$" style="height: 42px !important; font-size: 0.95rem !important; border: 1px solid #cbd5e1 !important; padding-left: 12px !important; box-sizing: border-box !important; border-radius: 6px !important; box-shadow: none !important;">
+                </div>
+
+                <!-- 3. EMAIL СОТРУДНИКА -->
+                <div style="width: 340px !important; min-width: 340px !important; display: flex !important; flex-direction: column !important; gap: 6px !important; box-sizing: border-box !important;">
+                    <label style="font-size: 0.85rem !important; font-weight: 700 !important; color: #475569 !important; white-space: nowrap !important;">3. Email сотрудника</label>
+                    <input type="email" class="form-control bg-white" id="secOnlyCreateEmail" placeholder="your-email@company.domen" required style="height: 42px !important; font-size: 0.95rem !important; border: 1px solid #cbd5e1 !important; padding-left: 12px !important; box-sizing: border-box !important; width: 100% !important; border-radius: 6px !important; box-shadow: none !important;">
+                </div>
+
+                <div style="flex: 1 !important;"></div>
+
+                <!-- КНОПКА ТРИГГЕРА СОЗДАНИЯ -->
+                <div style="width: 160px !important; min-width: 140px !important;">
+                    <button type="submit" id="btnSecOnlyCreateSubmit" class="btn fw-bold" style="width: 100% !important; font-size: 0.9rem !important; font-weight: 700 !important; height: 42px !important; background-color: #d97706 !important; color: #ffffff !important; border-radius: 6px !important; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;">Создать учетную запись</button>
+                </div>
+                
+            </form>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- ========================================================================= -->
+<!-- МОДАЛЬНОЕ ОКНО ДЛЯ СИСТЕМНЫХ И КАСТОМНЫХ РОЛЕЙ                            -->
+<!-- ========================================================================= -->
+<div id="systemRolesModal" style="display:none; position:fixed; z-index:9999; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6) !important; align-items:center; justify-content:center; box-sizing: border-box !important;">
+    <div style="width: 520px !important; padding: 25px !important; border: 1px solid #e2e8f0 !important; background-color: #ffffff !important; border-radius: 8px !important; box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.2), 0 4px 6px -4px rgba(15, 23, 42, 0.1) !important; box-sizing: border-box !important;">
+ 
+        <!-- ШАПКА ОКНА -->
+        <div style="display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 1px solid #e2e8f0 !important; padding-bottom: 15px !important; margin-bottom: 20px !important; box-sizing: border-box !important;">
+            <h5 style="margin: 0 !important; font-weight: 700 !important; font-size: 1.15rem !important; color: #1e293b !important; font-family: sans-serif !important;">Системные и кастомные роли кластера</h5>
+            <button type="button" style="background: none !important; border: none !important; font-size: 1.5rem !important; color: #94a3b8 !important; cursor: pointer !important; padding: 0 !important; line-height: 1 !important;" onclick="closeSystemRolesModal()">×</button>
+        </div>
+ 
+        <!-- ИНФО-ПАНЕЛЬ СУБД -->
+        <div style="background-color: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; border-radius: 6px !important; padding: 12px 16px !important; margin-bottom: 20px !important; font-size: 0.9rem !important; color: #475569 !important; font-family: sans-serif !important; box-sizing: border-box !important;">
+            Сервер: <strong id="modalServerLabel" style="color: #475569 !important; font-weight: 700 !important;">-</strong> &nbsp;|&nbsp; Пользователь: <strong id="modalUserLabel" style="color: #475569 !important; font-weight: 700 !important;">-</strong>
+        </div>
+ 
+        <!-- ФОРМА НАСТРОЙКИ -->
+        <form onsubmit="submitSystemRoleModal(event)" style="display: flex !important; flex-direction: column !important; gap: 15px !important; margin: 0 !important; box-sizing: border-box !important;">
+ 
+            <div style="display: flex !important; flex-direction: column !important; gap: 6px !important; box-sizing: border-box !important;">
+                <label style="margin: 0 !important; font-size: 0.85rem !important; font-weight: 700 !important; color: #64748b !important; font-family: sans-serif !important;">1. Выберите действие</label>
+                <select class="form-select" id="modalSysAction" style="height: 38px !important; font-size: 0.95rem !important; border-radius: 6px !important; border-color: #cbd5e1 !important; background-color: #ffffff !important;">
+                    <option value="GRANT">GRANT</option>
+                    <option value="REVOKE">REVOKE</option>
+                </select>
+            </div>
+ 
+            <!-- Список ролей С ИНТЕГРИРОВАННЫМ ТЕКСТОВЫМ ФИЛЬТРОМ ПОИСКА -->
+            <div style="display: flex !important; flex-direction: column !important; gap: 6px !important; box-sizing: border-box !important;">
+                <label style="margin: 0 !important; font-size: 0.85rem !important; font-weight: 700 !important; color: #64748b !important; font-family: sans-serif !important;">2. Выберите роли (зажмите Ctrl)</label>
+                
+                <!-- ИНПУТ ТЕКСТОВОГО ФИЛЬТРА -->
+                <input type="text" class="form-control form-control-sm" id="modalSysRolesFilter" placeholder="Быстрый фильтр по имени роли..." style="height: 34px !important; font-size: 0.88rem !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; margin-bottom: 2px !important; padding: 0 12px !important; box-sizing: border-box !important; width: 100% !important;" oninput="filterCustomModalRoles()">
+                
+                <select class="form-select" id="modalSysRolesSelect" multiple style="height: 180px !important; padding: 6px 10px !important; font-size: 0.9rem !important; width: 100% !important; border-radius: 6px !important; border-color: #cbd5e1 !important; background-color: #ffffff !important;"></select>
+            </div>
+ 
+            <!-- НИЖНЯЯ ПАНЕЛЬ КНОПОК -->
+            <div style="display: flex !important; justify-content: flex-end !important; gap: 12px !important; border-top: 1px solid #e2e8f0 !important; padding-top: 20px !important; margin-top: 10px !important; box-sizing: border-box !important;">
+                  <button type="button" class="btn" style="width: 120px !important; height: 38px !important; font-size: 0.9rem !important; font-weight: 700 !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; color: #475569 !important; background-color: #ffffff !important;" onclick="closeSyst; background-color: #ffffff !important;" onclick="closeSystemRolesModal()">Отмена</button>
+                    <button type="button" class="btn fw-bold" style="width: 120px !important; height: 38px !important; font-size: 0.9rem !important; font-weight: 700 !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important; color: #475569 !important; background-color: #ffffff !important;" onclick="submitSystemRoleModal(event)">Выполнить</button>
+            </div>
+ 
+        </form>
+    </div>
+</div>
+
+        <!-- ========================================================================= -->
+        <!-- Подвал авторского права -->
+        <!-- ========================================================================= -->
+        <footer style="width: 100% !important; margin-top: 60px !important; padding: 24px 0 !important; border-top: 1px solid #cbd5e1 !important; background-color: #f8fafc !important; box-sizing: border-box !important;">
+            <div style="max-width: 1200px !important; margin: 0 auto !important; padding: 0 20px !important; display: flex !important; justify-content: space-between !important; align-items: center !important; flex-wrap: wrap !important; gap: 12px !important;">
+                <div style="display: flex !important; align-items: center !important; gap: 8px !important;">
+                    <span style="font-size: 0.78rem !important; font-weight: 600 !important; color: #64748b !important; font-family: system-ui, -apple-system, sans-serif !important; letter-spacing: 0.02em !important;">                
+                    </span>
+                </div>
+            </div>
+        </footer>
+
+    </div> <!-- ЗАКРЫВАЮЩИЙ ТЕГ ДЛЯ <div id="appContainer"> !!! -->
+
+<!-- Изолированный дата-лист для автокомплита внутри селектора серверов Вкладки 2 -->
+<datalist id="rightsServerAutocompleteList"></datalist>
+<datalist id="globalDatabaseDatalist"></datalist>
+<datalist id="globalRoleDatalist"></datalist>
+
+<script type="module" src="js/app.js?v=1000000"></script>
+</body>
+</html>
+

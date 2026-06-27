@@ -1,0 +1,729 @@
+import uuid
+import os
+import smtplib
+import secrets
+import string
+import traceback
+import logging
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from fastapi import APIRouter, HTTPException, Depends, FastAPI
+from pydantic import BaseModel, Field
+from psycopg import connect, sql
+from datetime import datetime, timedelta, timezone
+
+
+# Инициализируем стандартный логгер uvicorn
+logger = logging.getLogger("uvicorn.error")
+
+
+# ИМПОРТИРУЕМ СТРОГО ИЗ UTILS
+import utils
+from utils import get_current_user, RoleChecker
+
+router = APIRouter(prefix="/api", tags=["Users"])
+
+
+# =========================================================================
+# ДИНАМИЧЕСКИЙ СБОР КАРТЫ ПОДКЛЮЧЕНИЙ К СУБД ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ .ENV
+# =========================================================================
+SERVICE_DB_HOST = os.getenv("SERVICE_DB_HOST", "127.0.0.1")
+SERVICE_DB_PORT = os.getenv("SERVICE_DB_PORT", "5432")
+SERVICE_DB_NAME = os.getenv("SERVICE_DB_NAME", "service_manager_db")
+SERVICE_DB_USER = os.getenv("SERVICE_DB_USER")
+SERVICE_DB_PASSWORD = os.getenv("SERVICE_DB_PASSWORD")
+
+# Затвор безопасности: жестко рубим старт рантайма при отсутствии секретов
+if not SERVICE_DB_USER or not SERVICE_DB_PASSWORD:
+    critical_err = "[ИБ-КРАХ] Фатальная ошибка: Переменные SERVICE_DB_USER или SERVICE_DB_PASSWORD не заданы в .env!"
+    print(critical_err)
+    raise RuntimeError(critical_err)
+
+# Автоматически собираем пуленепробиваемую строку DSN на лету!
+LOCAL_DB_DSN = f"host={os.getenv('SERVICE_DB_HOST')} port={os.getenv('SERVICE_DB_PORT')} dbname={os.getenv('SERVICE_DB_NAME')} user={os.getenv('SERVICE_DB_USER')} password={os.getenv('SERVICE_DB_PASSWORD')}"
+
+# =========================================================================
+# ИБ-КОНТУР PYDANTIC-ВАЛИДАЦИИ ДЛЯ ОБМЕНА JSON-ПАКЕТАМИ
+# =========================================================================
+class CreateUserRequest(BaseModel):
+    target_server: str = Field(..., description="ID сервера")
+    username: str = Field(..., min_length=1, max_length=63, pattern="^[a-zA-Z0-9_]+$")
+    email: str = Field(..., description="Email для отправки доступов")
+
+class DeleteUserRequest(BaseModel):
+    target_server: str = Field(..., description="ID сервера")
+    username: str = Field(..., min_length=1, max_length=63, pattern="^[a-zA-Z0-9_]+$")
+
+class LockUserRequest(BaseModel):
+    target_server: str = Field(..., description="ID сервера")
+    username: str = Field(..., min_length=1, max_length=63, pattern="^[a-zA-Z0-9_]+$")
+    action: str = Field(..., description="LOCK или UNLOCK")
+# =========================================================================
+# ИБ-МОДЕЛЬ ВАЛИДАЦИИ СТРОГОГО РЕЖИМА СОЗДАНИЯ РОЛЕЙ
+# =========================================================================
+class SecurityOnlyCreateRequest(BaseModel):
+    target_server: str = Field(..., description="ID сервера")
+    db_user_name: str = Field(..., min_length=1, max_length=63, pattern="^[a-zA-Z0-9_]+$")
+    employee_email: str = Field(..., description="Email сотрудника")
+    action_mode: str = Field(..., description="Режим действия")
+    operator: str = Field(..., description="Логин оператора ИБ")
+
+
+async def token_garbage_collector():
+    logger.info("[ИБ-ВОРКЕР] Фоновый очиститель токенов успешно запущен в асинхронном потоке!")
+    
+    while True:
+        conn = None
+        cur = None
+        try:
+            # Открываем чистое соединение под единым DSN
+            conn = connect(LOCAL_DB_DSN)
+            cur = conn.cursor()
+            
+            # Выполняем очистку сгоревших одноразовых ссылок
+            cur.execute("DELETE FROM one_time_tokens WHERE expires_at::timestamp < localtimestamp;")
+            conn.commit()
+            
+            deleted_count = cur.rowcount
+            if deleted_count > 0:
+                logger.info(f"[ИБ-КЛИНИНГ] Операция успешна. Ликвидировано {deleted_count} устаревших ИБ-токенов из service_manager_db.")
+                
+        except Exception as err:
+            # КРИТИЧНО ДЛЯ ИБ: Выводим подробный Traceback аварии сокета в journalctl
+            logger.error(f"[КРИТИЧЕСКАЯ ОШИБКА ВОРКЕРА ИБ]: {str(err)}", exc_info=True)
+            
+        finally:
+            # ГАРАНТИЯ БЕЗОПАСНОСТИ: Закрываем ресурсы в любом случае, предотвращая утечки пула сессий
+            if cur:
+                try: cur.close()
+                except Exception: pass
+            if conn:
+                try: conn.close()
+                except Exception: pass
+        
+        # ИБ-ФИКС: Переносим команду сна внутрь цикла while True с правильным отступом (4 пробела)
+        # Воркер гарантированно уснет на 1 час после любого исхода (успех или краш сети)
+        await asyncio.sleep(3600)
+
+
+# =========================================================================
+# 1. ИБ-КОНТУР ГЕНЕРАЦИИ ТОКЕНОВ И ОТПРАВКИ ГЛЯНЦЕВЫХ HTML-ПИСЕМ
+# =========================================================================
+def send_credentials_email(target_email: str, db_user: str, db_pass: str, host: str, port: int) -> bool:
+    """Динамически собирает параметры из ОЗУ, генерирует токен безопасности и шлёт HTML-письмо"""
+    if not target_email or not db_user or not db_pass:
+        return False
+
+    # ИБ-ФИКС: Динамически забираем актуальные настройки БЕЗ дефолтных внешних доменов
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_password = os.environ.get("SMTP_PASSWORD", "")
+
+    # Жёсткий затвор: если параметры шлюза не настроены в .env, немедленно рубим транзакцию
+    if not smtp_host or not smtp_user or not smtp_password:
+        logger.error("[ИБ-АУДИТ] !!! СБОЙ ОТПРАВКИ | Критические параметры SMTP-шлюза отсутствуют в конфигурации .env!")
+        return False
+
+    try:
+        smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+    except ValueError:
+        smtp_port = 465
+
+    # Всеядный парсинг флага защищенного соединения
+    env_tls = os.environ.get("SMTP_USE_TLS", "TRUE").upper()
+    use_ssl_direct = True if env_tls in ["TRUE", "1", "YES"] else False
+
+    # Криптографический ИБ-контур генерации токенов доступа
+    secure_token = str(uuid.uuid4())
+    import datetime
+    expiry_time = datetime.datetime.now() + datetime.timedelta(hours=24)
+
+    try:
+        local_db_conn = connect(LOCAL_DB_DSN)
+        local_db_conn.autocommit = True
+        with local_db_conn.cursor() as cursor:
+            cursor.execute(
+                'INSERT INTO one_time_tokens (token_id, db_user, encrypted_password, expires_at) VALUES (%s, %s, %s, %s);',
+                (secure_token, db_user, db_pass, expiry_time)
+            )
+        local_db_conn.close()
+    except Exception as db_err:
+        logger.error(f"[ИБ-КРАХ] Не удалось сохранить токен безопасности в service_manager_db: {str(db_err)}", exc_info=True)
+        return False
+
+    # Сборка глянцевого HTML-письма (Берём базовый URL из .env, чтобы не хардкодить IP-адрес)
+    panel_url = os.environ.get("PANEL_BASE_URL", "https://192.168.0.197").rstrip('/')
+    one_time_url = f"{panel_url}/api/view-password/{secure_token}"
+    
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f"🔒 ПАРАМЕТРЫ АВТОРИЗАЦИИ СУБД ПОД РОЛЬЮ [{db_user}]"
+    msg['From'] = smtp_user
+    msg['To'] = target_email
+
+    # НАЧАЛО ГЛЯНЦЕВОЙ ИБ-ВЕРСТКИ ОРИГИНАЛЬНОГО ПИСЬМА
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin: 0; padding: 40px 0; background-color: #f8fafc; font-family: system-ui, sans-serif;">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f8fafc;">
+    <tr>
+    <td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color: #ffffff; border-left: 5px solid #0f172a; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+    <tr>
+    <td style="padding: 40px 50px;">
+    <h2 style="margin: 0 0 16px 0; font-size: 1.35rem; color: #0f172a;">PostgreSQL Security Access Link</h2>
+    <p style="margin: 0 0 24px 0; font-size: 0.95rem; line-height: 1.5; color: #475569;">Для учетной записи <strong style="color: #0f172a;">{db_user}</strong> сгенерированы новые параметры авторизации в СУБД кластере.</p>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: separate; margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+    <tr>
+    <td width="140" style="padding: 12px 16px; font-size: 0.85rem; font-weight: 700; color: #475569; background-color: #f1f5f9; border-right: 1px solid #e2e8f0;">ЦЕЛЕВОЙ ХОСТ</td>
+    <td style="padding: 12px 16px; font-size: 0.88rem; font-weight: 700; color: #0f172a; font-family: monospace; background-color: #f8fafc;">{host}:{port}</td>
+    </tr>
+    </table>
+    <div style="text-align: center; margin: 32px 0;">
+    <a href="{one_time_url}" target="_blank" style="display: inline-block; background: linear-gradient(to bottom, #1e293b, #0f172a); padding: 14px 28px; border-radius: 6px; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 0.95rem;">Получить временный пароль</a>
+    </div>
+    <p style="margin: 24px 0 0 0; font-size: 0.8rem; color: #94a3b8; text-align: center; line-height: 1.4;">
+    * Внимание: данная ссылка сгорит автоматически ровно через 24 часа<br>или будет безвозвратно уничтожена СУБД сразу после первого показа.
+    </p>
+    </td>
+    </tr>
+    </table>
+    </td>
+    </tr>
+    </table>
+    </body>
+    </html>
+    """
+    msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+
+    # -------------------------------------------------------------------------
+    # СЕТЕВОЙ КАНАЛ СВЯЗИ С ПОЧТОВЫМ СЕРВЕРОМ
+    # -------------------------------------------------------------------------
+    try:
+        logger.info(f"[ИБ-АУДИТ] Инициирована отправка доступов для роли '{db_user}' на адрес '{target_email}' через шлюз {smtp_host}...")
+        if use_ssl_direct or smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                server.login(smtp_user, smtp_password)
+                server.sendmail(smtp_user, target_email, msg.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.sendmail(smtp_user, target_email, msg.as_string())
+        logger.info(f"[ИБ-АУДИТ] Письмо доступов для роли '{db_user}' успешно доставлено на шлюз.")
+        return True
+    except Exception as smtp_err:
+        logger.error(f"[ИБ-КРАХ] Сетевой SMTP-шлюз {smtp_host}:{smtp_port} отклонил отправку письма: {str(smtp_err)}", exc_info=True)
+        return False
+
+
+# =========================================================================
+# # 2. API-РОУТЕР ВЕЕРНОЙ НАКАТКИ ПРАВ И СОЗДАНИЯ ПОЛЬЗОВАТЕЛЕЙ СУБД
+# =========================================================================
+@router.post("/users")
+@router.post("/users/")
+def create_user(
+    req: CreateUserRequest,
+    # ИБ-ФИКС: Расширяем ролевую модель, открывая суверенный доступ ИБ-Надзирателю
+    current_user: str = Depends(RoleChecker(["admin"]))
+):
+    # ИБ-ЛОГ: Фиксируем попытку создания/сброса пароля пользователя на удаленной СУБД
+    logger.info(f"[ИБ-АУДИТ] >>> ЗАПРОС СОЗДАНИЯ РОЛИ СУБД | Администратор: '{current_user}' | Целевой сервер: '{req.target_server}' | Пользователь: '{req.username}' | Почта: '{req.email}'")
+
+    server_config = utils.get_server_from_db(req.target_server)
+
+    # Стойкий алфавит для генерации случайных паролей в 16 символов
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()_+-="
+    generated_password = "".join(secrets.choice(alphabet) for _ in range(16))
+
+    user_ident = sql.Identifier(req.username)
+    pass_literal = sql.Literal(generated_password)
+
+    check_query = "SELECT 1 FROM pg_roles WHERE rolname = %s"
+
+    # Безопасная компиляция динамического SQL через psycopg.sql
+    create_query = sql.SQL("CREATE ROLE {user} WITH LOGIN PASSWORD {password} NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT;").format(
+        user=user_ident, password=pass_literal
+    )
+
+    update_query = sql.SQL("ALTER ROLE {user} WITH PASSWORD {password};").format(
+        user=user_ident, password=pass_literal
+    )
+
+    operation_type = "CREATE_USER"
+    success_message = f"Пользователь '{req.username}' успешно создан!"
+    try:
+        with connect(**server_config) as conn:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                
+                # -------------------------------------------------------------------------
+                # ИБ-ЗАЩИТА: Локальный перехват ошибок СУБД для предотвращения дедлоков
+                # -------------------------------------------------------------------------
+                try:
+                    cur.execute(check_query, (req.username,))
+                    is_existing_user = cur.fetchone()
+                except Exception as check_err:
+                    logger.error(f"[ИБ-ОТКАЗ] Не удалось проверить существование роли '{req.username}': {str(check_err)}")
+                    raise HTTPException(status_code=422, detail=f"Ошибка СУБД при валидации учетной записи: {str(check_err)}")
+
+                if is_existing_user:
+                    # Переходим в режим ALTER ROLE, если учетка уже существует
+                    logger.info(f"[ИБ-АУДИТ] -> Роль '{req.username}' найдена на сервере '{req.target_server}'. Переключаемся в режим изменения пароля.")
+                    operation_type = "RESET_PASSWORD"
+                    success_message = f"Пароль пользователя '{req.username}' успешно изменен!"
+                    try:
+                        cur.execute(update_query)
+                    except Exception as update_err:
+                        logger.error(f"[ИБ-ОТКАЗ] Не удалось сбросить пароль роли '{req.username}': {str(update_err)}")
+                        raise HTTPException(status_code=422, detail=f"Удаленная СУБД отклонила смену пароля: {str(update_err)}")
+                else:
+                    logger.info(f"[ИБ-АУДИТ] -> Роль '{req.username}' не найдена. Выполняем CREATE ROLE.")
+                    try:
+                        cur.execute(create_query)
+                    except Exception as create_err:
+                        logger.error(f"[ИБ-ОТКАЗ] Не удалось создать роль '{req.username}': {str(create_err)}")
+                        raise HTTPException(status_code=422, detail=f"Удаленная СУБД отклонила создание роли: {str(create_err)}")
+
+        email_status = "success"
+        email_err = None
+
+        # Отправка токена безопасности на указанную почту
+        logger.info(f"[ИБ-АУДИТ] -> Инициируем генерацию токена безопасности и отправку почты для '{req.username}'...")
+        mail_success = send_credentials_email(
+            req.email, req.username, generated_password, server_config["host"], server_config["port"]
+        )
+
+        if not mail_success:
+            email_status = "email_failed"
+            email_err = "SMTP шлюз отклонил доставку или упала локальная БД панели"
+            logger.warning(f"[ИБ-АУДИТ] !!! СБОЙ ПОЧТЫ | Не удалось доставить доступы для '{req.username}' на адрес '{req.email}'")
+
+        # Запись во внутреннюю таблицу аудита панели
+        utils.log_operation(
+            req.target_server, req.username, req.email, operation_type, "LOGIN",
+            email_status, email_err, admin_username=current_user
+        )
+
+        logger.info(f"[ИБ-АУДИТ] <<< ОПЕРАЦИЯ УСПЕШНА | Роль '{req.username}' обработана администратором '{current_user}'. Статус почты: {email_status.upper()}")
+        return {"status": "success", "message": success_message}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        # Логируем сбой во внутреннюю таблицу логов панели
+        utils.log_operation(
+            req.target_server, req.username, req.email, operation_type, "LOGIN",
+            "error", err_msg, admin_username=current_user
+        )
+
+        # КРИТИЧНО ДЛЯ ИБ: Записываем крах создания пользователя в логгер ОС с подробным traceback
+        logger.error(f"[ИБ-КРАХ] Фатальная ошибка создания/модификации роли '{req.username}' администратором '{current_user}': {err_msg}", exc_info=True)
+
+        # Полное маскирование технической структуры ошибок PostgreSQL от внешнего пользователя
+        raise HTTPException(
+            status_code=500,
+            detail="Ошибка выполнения операции на удаленном сервере СУБД. Убедитесь в доступности узла и проверьте права администратора."
+        )
+
+# =========================================================================
+# # 3. КАСКАДНОЕ УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ ИЗ ВСЕХ БД КЛАСТЕРА
+# =========================================================================
+@router.delete("/users")
+@router.delete("/users/")
+def delete_user(
+    req: DeleteUserRequest,
+    # ИБ-ФИКС: Расширяем ролевую модель, открывая суверенный доступ ИБ-Надзирателю
+    current_user: str = Depends(RoleChecker(["admin"]))
+):
+    # ИБ-ЛОГ: Фиксируем старт разрушительной операции каскадного удаления роли
+    logger.info(f"[ИБ-АУДИТ] >>> ЗАПРОС КАСКАДНОГО УДАЛЕНИЯ РОЛИ | Администратор: '{current_user}' | Сервер: '{req.target_server}' | Удаляемый пользователь: '{req.username}'")
+
+    base_config = utils.get_server_from_db(req.target_server)
+    user_name_raw = req.username
+    user_ident = sql.Identifier(user_name_raw)
+
+    # Компиляция безопасных DDL запросов тотальной аннигиляции прав
+    reassign_query = sql.SQL("REASSIGN OWNED BY {user} TO CURRENT_USER;").format(user=user_ident)
+    drop_owned_query = sql.SQL("DROP OWNED BY {user};").format(user=user_ident)
+    drop_role_query = sql.SQL("DROP ROLE {user};").format(user=user_ident)
+
+    try:
+        databases = []
+        with connect(**base_config) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate;")
+                databases = [row[0] for row in cur.fetchall() if row and row[0]]
+
+        # --- КОНТУР А: Зачистка ГЛОБАЛЬНЫХ прав доступа (CONNECT/CREATE) ко всем базам кластера
+        try:
+            with connect(**base_config) as root_conn:
+                root_conn.autocommit = True
+                with root_conn.cursor() as root_cur:
+                    for db in databases:
+                        try:
+                            root_cur.execute(sql.SQL("REVOKE ALL PRIVILEGES ON DATABASE {} FROM {};").format(sql.Identifier(db), user_ident))
+                        except Exception as e:
+                            logger.debug(f"[ИБ-АУДИТ] Не удалось отозвать права на БД '{db}' (возможно, их не было): {str(e)}")
+        except Exception as root_err:
+            logger.warning(f"[ИБ-АУДИТ] !!! Предупреждение корневого контура СУБД при деактивации '{user_name_raw}': {str(root_err)}")
+        import time # Импортируем модуль времени для контроля удержания блокировок метаданных
+
+        # --- КОНТУР Б: Каскадный проход ПО ВСЕМ БАЗАМ ДАННЫХ для тотальной аннигиляции локальных ACL
+        for db in databases:
+            db_config = base_config.copy()
+            db_config["dbname"] = db
+            try:
+                with connect(**db_config) as conn:
+                    conn.autocommit = True
+                    with conn.cursor() as cur:
+                        # Последовательно выжигаем права на все объекты в схеме public
+                        for stmt, label in [
+                            ("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM {};", "TABLES"),
+                            ("REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM {};", "SEQUENCES"),
+                            ("REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public FROM {};", "FUNCTIONS"),
+                            ("REVOKE ALL PRIVILEGES ON SCHEMA public FROM {};", "SCHEMA")
+                        ]:
+                            try:
+                                cur.execute(sql.SQL(stmt).format(user_ident))
+                            except Exception:
+                                pass # Отсутствие прав на конкретный тип объектов пропускаем
+
+                        # [ИБ-ВЫПРЯМИТЕЛЬ ДЕДЛОКОВ]: Перед изменением системных каталогов СУБД даем микропаузу ядра
+                        time.sleep(0.1)
+
+                        # Переназначаем владение объектами и дропаем остатки зависимостей
+                        try: cur.execute(reassign_query)
+                        except Exception: pass
+                        
+                        try: cur.execute(drop_owned_query)
+                        except Exception: pass
+
+            except Exception as db_err:
+                logger.warning(f"[ИБ-АУДИТ] !!! База '{db}' пропущена при ACL-зачистке роли '{user_name_raw}': {str(db_err)}")
+
+        # --- Полное физическое удаление роли из кластера PostgreSQL
+        with connect(**base_config) as conn:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s;", (user_name_raw,))
+                if cur.fetchone():
+                    cur.execute(drop_role_query)
+                    logger.info(f"[ИБ-АУДИТ] -> Роль '{user_name_raw}' успешно удалена из pg_roles сервера '{req.target_server}'.")
+                else:
+                    logger.warning(f"[ИБ-АУДИТ] !!! Объект не найден | Роль '{user_name_raw}' уже отсутствовала в pg_roles.")
+                    raise HTTPException(status_code=404, detail=f"Роль '{user_name_raw}' уже удалена.")
+
+        # Фиксируем успешную операцию во внутренней таблице аудита панели
+        utils.log_operation(req.target_server, user_name_raw, "ALL_PRIVILEGES", "DROP_USER", "CASCADE", "success", admin_username=current_user)
+
+        logger.info(f"[ИБ-АУДИТ] <<< КАСКАДНОЕ УДАЛЕНИЕ ЗАВЕРШЕНО | Пользователь '{user_name_raw}' полностью выжжен из инфраструктуры администратором '{current_user}'.")
+        return {"status": "success", "message": f"Пользователь '{user_name_raw}' со всеми зависимостями каскадно удален из всех баз кластера!"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        utils.log_operation(req.target_server, user_name_raw, "ALL_PRIVILEGES", "DROP_USER", "CASCADE", "error", err_msg, admin_username=current_user)
+
+        # КРИТИЧНО ДЛЯ ИБ: Записываем крах каскадного удаления в логгер ОС с подробным traceback
+        logger.error(f"[ИБ-КРАХ] Фатальный сбой каскадного удаления роли '{user_name_raw}' администратором '{current_user}': {err_msg}", exc_info=True)
+
+        raise HTTPException(
+            status_code=500,
+            detail="Ошибка каскадного удаления роли на удаленном сервере. Проверьте блокировки таблиц (Locks) или права суперпользователя."
+        )
+
+# =========================================================================
+# # 4. БЛОКИРОВКА / РАЗБЛОКИРОВКА УЧЕТНОЙ ЗАПИСИ
+# =========================================================================
+@router.post("/users/status")
+@router.post("/users/status/")
+def lock_user(
+    req: LockUserRequest,
+    current_user: str = Depends(RoleChecker(["admin", "Security_Manager"]))
+):
+    current_action = req.action.strip().upper()
+
+    # ИБ-ЛОГ: Фиксируем попытку изменения статуса активности роли в удаленной СУБД
+    logger.info(
+        f"[ИБ-АУДИТ] >>> ЗАПРОС ИЗМЕНЕНИЯ СТАТУСА РОЛИ СУБД | "
+        f"Администратор: '{current_user}' | Сервер: '{req.target_server}' | "
+        f"Пользователь: '{req.username}' | Действие: {current_action}"
+    )
+
+    server_config = utils.get_server_from_db(req.target_server)
+    # Гарантируем жесткий разрыв соединения через 5 секунд, если хост недоступен
+    server_config["connect_timeout"] = 5 
+    
+    user_ident = sql.Identifier(req.username)
+    check_query = "SELECT 1 FROM pg_roles WHERE rolname = %s"
+
+    try:
+        with connect(**server_config) as conn:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                
+                # 1. Локальный перехват проверки существования пользователя
+                try:
+                    cur.execute(check_query, (req.username,))
+                    is_user_exists = cur.fetchone()
+                except Exception as check_err:
+                    logger.error(f"[ИБ-ОТКАЗ] Не удалось проверить роль '{req.username}' на удаленной СУБД: {str(check_err)}")
+                    raise HTTPException(status_code=422, detail=f"Ошибка связи с СУБД при валидации роли: {str(check_err)}")
+
+                if not is_user_exists:
+                    logger.warning(f"[ИБ-АУДИТ] !!! ОБЪЕКТ НЕ НАЙДЕН | Пользователь '{req.username}' не существует на сервере '{req.target_server}'.")
+                    raise HTTPException(status_code=404, detail=f"Пользователь '{req.username}' не найден на целевом сервере!")
+
+                # 2. ИСПОЛНЕНИЕ ДЕЙСТВИЯ: LOCK (БЛОКИРОВКА РОЛИ)
+                if current_action == "LOCK":
+                    logger.info(f"[ИБ-АУДИТ] -> Накладываем ограничение NOLOGIN на роль '{req.username}'...")
+                    
+                    try:
+                        cur.execute(sql.SQL("ALTER ROLE {user} NOLOGIN;").format(user=user_ident))
+                    except Exception as lock_err:
+                        logger.error(f"[ИБ-ОТКАЗ] СУБД отклонила команду NOLOGIN для '{req.username}': {str(lock_err)}")
+                        raise HTTPException(status_code=422, detail=f"Удаленный сервер PostgreSQL отклонил блокировку: {str(lock_err)}")
+
+                    utils.log_operation(
+                        req.target_server, req.username, "LOGIN_PRIVILEGE", "LOCK_USER", "LOCK",
+                        "success", admin_username=current_user
+                    )
+
+                    logger.info(f"[ИБ-АУДИТ] <<< УСПЕХ | Роль '{req.username}' успешно заблокирована администратором '{current_user}'.")
+                    return {"status": "success", "message": f"Пользователь '{req.username}' успешно заблокирован!"}
+
+                # 3. ИСПОЛНЕНИЕ ДЕЙСТВИЯ: UNLOCK (РАЗБЛОКИРОВКА РОЛИ)
+                elif current_action == "UNLOCK":
+                    logger.info(f"[ИБ-АУДИТ] -> Снимаем ограничение NOLOGIN (выдаем LOGIN) для роли '{req.username}'...")
+                    
+                    try:
+                        cur.execute(sql.SQL("ALTER ROLE {user} LOGIN;").format(user=user_ident))
+                    except Exception as unlock_err:
+                        logger.error(f"[ИБ-ОТКАЗ] СУБД отклонила команду LOGIN для '{req.username}': {str(unlock_err)}")
+                        raise HTTPException(status_code=422, detail=f"Удаленный сервер PostgreSQL отклонил разблокировку: {str(unlock_err)}")
+
+                    utils.log_operation(
+                        req.target_server, req.username, "LOGIN_PRIVILEGE", "LOCK_USER", "REVOKE_LOCK",
+                        "success", admin_username=current_user
+                    )
+
+                    logger.info(f"[ИБ-АУДИТ] <<< УСПЕХ | Роль '{req.username}' успешно разблокирована администратором '{current_user}'.")
+                    return {"status": "success", "message": f"Пользователь '{req.username}' успешно разблокирован!"}
+
+                else:
+                    logger.warning(f"[ИБ-АУДИТ] !!! КОРРУПТИВНЫЙ ЗАПРОС | Передано недопустимое действие '{current_action}' от '{current_user}'")
+                    raise HTTPException(status_code=400, detail=f"Недопустимое действие: {req.action}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        bad_action = "LOCK_USER" if current_action == "LOCK" else "UNLOCK_USER"
+        bad_priv = "LOCK" if current_action == "LOCK" else "UNLOCK"
+
+        # Запись об ошибке во внутренний аудит-журнал СУБД панели
+        utils.log_operation(
+            req.target_server, req.username, "LOGIN_PRIVILEGE", bad_action, bad_priv,
+            "error", err_msg, admin_username=current_user
+        )
+
+        # КРИТИЧНО ДЛЯ ИБ: Логируем фатальный сбой транзакции в логгер ОС с полной трассировкой
+        logger.error(f"[ИБ-КРАХ] Не удалось изменить статус роли '{req.username}' администратором '{current_user}' на сервере '{req.target_server}': {err_msg}", exc_info=True)
+
+        # Маскируем сырую ошибку PostgreSQL для защиты архитектуры корпоративной сети от утечек
+        raise HTTPException(
+            status_code=500,
+            detail="Ошибка выполнения операции на удаленном сервере СУБД. Убедитесь в доступности узла и проверьте права роли."
+        )
+
+# =========================================================================
+# # 5. API-РОУТЕР ОДНОРАЗОВОГО ПРОСМОТРА ПАРОЛЯ С ГАРАНТИРОВАННЫМ JSON-ОТВЕТОМ
+# =========================================================================
+@router.get("/view-password/{token_id}")
+@router.get("/view-password/{token_id}/")
+async def view_one_time_password(token_id: str):
+    """Атомарно выдает пароль пользователю ОДИН раз и мгновенно сжигает токен в СУБД панели"""
+    # ИБ-ЛОГ: Фиксируем сам факт обращения к конфиденциальному одноразовому токену
+    logger.info(f"[ИБ-АУДИТ] >>> Запрос раскрытия одноразового токена доступа. ID токена: {token_id}")
+
+    # ИБ-ФИКС: Исправляем NameError, используя полный системный путь класса datetime
+    import datetime
+    current_time = datetime.datetime.now()
+    
+    db_conn = None
+    db_user = ""
+    decrypted_pass = ""
+
+    try:
+        # Открываем чистое соединение в локальную СУБД панели по каналу DSN
+        db_conn = connect(LOCAL_DB_DSN)
+        db_conn.autocommit = True
+
+        with db_conn.cursor() as cursor:
+            # Строгий SQL-запрос с обязательной проверкой времени жизни (expires_at)
+            cursor.execute(
+                "SELECT db_user, encrypted_password FROM one_time_tokens WHERE token_id = %s AND expires_at > %s;",
+                (token_id, current_time)
+            )
+            token_data = cursor.fetchone()
+
+            # АБСОЛЮТНЫЙ ИБ-ПЕРЕХВАТ СГОРЕВШИХ ИЛИ ПОВТОРНЫХ ТОКЕНОВ
+            if not token_data:
+                # ИБ-ФИКС: Понижаем уровень спама диска до info для защиты от DOS-атак перебором UUID
+                logger.info(f"[ИБ-СЕССИЯ] !!! ОТКАЗ В ДОСТУПЕ | Попытка использовать невалидный или просроченный токен: {token_id}")
+                return {
+                    "status": "error",
+                    "message": "Ссылка устарела, сгорела или уже была открыта ранее! (404 Token Expired)"
+                }
+
+            # Распаковка выполняется строго после успешной ИБ-проверки на пустоту
+            db_user = str(token_data[0])
+            decrypted_pass = str(token_data[1])
+
+            # АТОМАРНАЯ САМОЛИКВИДАЦИЯ: Выжигаем секрет из базы данных панели навсегда!
+            cursor.execute("DELETE FROM one_time_tokens WHERE token_id = %s;", (token_id,))
+            logger.info(f"[ИБ-АУДИТ] -> Токен {token_id} успешно погашен. Секрет удален из СУБД service_manager_db.")
+
+            # ИБ-ЛОГ: Подтверждаем успешный показ учетных данных в логгер сервера
+            logger.info(f"[ИБ-АУДИТ] <<< УСПЕХ | Секретные данные для роли '{db_user}' успешно раскрыты пользователю.")
+            return {
+                "status": "success",
+                "username": db_user,
+                "password": decrypted_pass,
+                "warning": "Внимание! Секрет стерт из базы данных панели навсегда. Запишите его прямо сейчас!"
+            }
+
+    except Exception as view_err:
+        # КРИТИЧНО ДЛЯ ИБ: Записываем крах дешифрации или СУБД в логгер ОС с подробным traceback
+        logger.error(f"[ИБ-КРАХ] Фатальный сбой обработки токена {token_id}: {str(view_err)}", exc_info=True)
+        return {
+            "status": "error",
+            "message": "Критический сбой сервера при верификации секретного токена."
+        }
+
+    finally:
+        # ГАРАНТИЯ БЕЗОПАСНОСТИ: Закрываем сокет в любом случае, предотвращая утечки пула соединений
+        if db_conn and not db_conn.closed:
+            db_conn.close()
+
+# =========================================================================
+# # №6: ИЗОЛИРОВАННОЕ СОЗДАНИЕ УЗ ПАНЕЛИ ИБ (БЕЗ СМЕНЫ ПАРОЛЕЙ)
+# =========================================================================
+@router.post("/manage-postgres-users")
+@router.post("/manage-postgres-users/")
+def security_only_create_postgres_user(
+    req: SecurityOnlyCreateRequest,
+    current_user: str = Depends(RoleChecker(["Security_Manager"]))
+):
+    # ИБ-ЛОГ: Фиксируем попытку изолированного создания роли в режиме Zero Trust
+    logger.info(
+        f"[ИБ-АУДИТ] >>> ЗАПРОС ИЗОЛИРОВАННОГО СОЗДАНИЯ РОЛИ | "
+        f"Офицер ИБ: '{current_user}' | Сервер: '{req.target_server}' | "
+        f"Пользователь: '{req.db_user_name}' | Режим: '{req.action_mode}'"
+    )
+
+    # Жесткий Zero Trust заслон: если режим не CREATE_ONLY — немедленно рубим транзакцию
+    if req.action_mode != "CREATE_ONLY":
+        logger.warning(
+            f"[ИБ-АУДИТ] !!! ОТКАЗ В ОПЕРАЦИИ | Недопустимый режим действия '{req.action_mode}' "
+            f"от офицера '{current_user}'. Контур заблокирован в режиме CREATE_ONLY."
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="ИБ Запрет: В данном контуре разрешено исключительно создание новых учетных записей!"
+        )
+
+    server_config = utils.get_server_from_db(req.target_server)
+    # Гарантируем жесткий сброс сессии через 5 секунд, если хост недоступен
+    server_config["connect_timeout"] = 5
+
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()_+-="
+    generated_password = "".join(secrets.choice(alphabet) for _ in range(16))
+
+    user_ident = sql.Identifier(req.db_user_name)
+    pass_literal = sql.Literal(generated_password)
+
+    check_query = "SELECT 1 FROM pg_roles WHERE rolname = %s"
+    create_query = sql.SQL(
+        "CREATE ROLE {user} WITH LOGIN PASSWORD {password} NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT;"
+    ).format(user=user_ident, password=pass_literal)
+
+    try:
+        with connect(**server_config) as conn:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                
+                # -------------------------------------------------------------------------
+                # ИБ-ЗАЩИТА: Локальный перехват ошибок СУБД для предотвращения дедлоков
+                # -------------------------------------------------------------------------
+                try:
+                    # Намертво проверяем существование роли в кластере PostgreSQL
+                    cur.execute(check_query, (req.db_user_name,))
+                    is_role_exists = cur.fetchone()
+                except Exception as check_err:
+                    logger.error(f"[ИБ-ОТКАЗ] Не удалось проверить роль '{req.db_user_name}' на удаленной СУБД: {str(check_err)}")
+                    raise HTTPException(status_code=422, detail=f"Ошибка СУБД при валидации роли: {str(check_err)}")
+
+                if is_role_exists:
+                    # МОНУМЕНТАЛЬНЫЙ ИБ-БЛОК: Если роль найдена — выкидываем жесткий отказ
+                    logger.warning(
+                        f"[ИБ-АУДИТ] !!! СРАБАТЫВАНИЕ ЗАЩИТЫ | Попытка перезаписи пароля существующей роли "
+                        f"'{req.db_user_name}' на сервере '{req.target_server}' от офицера '{current_user}'."
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"ИБ Запрет: Роль '{req.db_user_name}' уже существует в СУБД! Изменение её пароля в данном изолированном контуре заблокировано."
+                    )
+
+                # Если пользователя нет — выполняем чистый CREATE ROLE
+                logger.info(f"[ИБ-АУДИТ] -> Роль '{req.db_user_name}' свободна. Выполняем изолированный CREATE ROLE.")
+                try:
+                    cur.execute(create_query)
+                except Exception as create_err:
+                    logger.error(f"[ИБ-ОТКАЗ] Не удалось создать роль '{req.db_user_name}': {str(create_err)}")
+                    raise HTTPException(status_code=422, detail=f"Удаленная СУБД отклонила изолированное создание роли: {str(create_err)}")
+
+        email_status = "success"
+        email_err = None
+
+        # Генерируем одноразовую ссылку доступа и шлем шифрованный лог на Email
+        logger.info(f"[ИБ-АУДИТ] -> Инициируем генерацию секретного токена и отправку почты для '{req.db_user_name}'...")
+        mail_success = send_credentials_email(
+            req.employee_email, req.db_user_name, generated_password, server_config["host"], server_config["port"]
+        )
+
+        if not mail_success:
+            email_status = "email_failed"
+            email_err = "SMTP шлюз отклонил доставку или упала локальная БД панели"
+            logger.warning(f"[ИБ-АУДИТ] !!! СБОЙ ДОСТАВКИ | Не удалось направить токен доступа для '{req.db_user_name}' на адрес '{req.employee_email}'")
+
+        # Запечатываем операцию в сквозной журнал гибридного супер-аудита ИБ панели
+        utils.log_operation(
+            req.target_server, req.db_user_name, req.employee_email,
+            "SECURITY_CREATE_USER", "LOGIN", email_status, email_err, admin_username=current_user
+        )
+
+        logger.info(f"[ИБ-АУДИТ] <<< ИЗОЛИРОВАННАЯ РОЛЬ УСПЕШНО СОЗДАНА | Администратор: '{current_user}'. Почта: {email_status.upper()}")
+        return {"status": "success", "message": f"Новая роль '{req.db_user_name}' успешно создана! Доступы направлены на почту."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        utils.log_operation(
+            req.target_server, req.db_user_name, req.employee_email,
+            "SECURITY_CREATE_USER", "LOGIN", "error", err_msg, admin_username=current_user
+        )
+
+        # КРИТИЧНО ДЛЯ ИБ: Записываем фатальный сбой транзакции в логгер ОС с подробным traceback
+        logger.error(f"[ИБ-КРАХ] Ошибка изолированного создания роли '{req.db_user_name}' офицером '{current_user}' на сервере '{req.target_server}': {err_msg}", exc_info=True)
+
+        # Маскируем сырую ошибку PostgreSQL для защиты архитектуры корпоративной сети от утечек
+        raise HTTPException(
+            status_code=500,
+            detail="Ошибка выполнения операции на удаленном сервере СУБД. Убедитесь в доступности узла и проверьте лимиты роли суперпользователя."
+        )
